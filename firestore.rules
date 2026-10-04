@@ -1,0 +1,93 @@
+rules_version = '2';
+
+// Níveis de acesso pelo campo `role` de users/{uid}: admin | qa | dev | pendente.
+// O nível é alterado direto no console do Firestore (ou pelo admin na tela de usuários).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function perfil() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function role() {
+      return request.auth == null ? null
+        : exists(perfil()) ? get(perfil()).data.get('role', 'pendente') : 'pendente';
+    }
+    function isAdmin() { return role() == 'admin'; }
+    function isQA() { return role() in ['admin', 'qa']; }
+    function isDev() { return role() == 'dev'; }
+
+    // Perfis: cada um cria o próprio no primeiro acesso, sempre como pendente.
+    // Só o admin muda o nível dos outros; ninguém muda o próprio.
+    match /users/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['email', 'nome', 'foto', 'role', 'criadoEm'])
+        && request.resource.data.role == 'pendente';
+      allow update: if isAdmin() && request.auth.uid != uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'roleAlteradoPor', 'roleAlteradoEm'])
+        && request.resource.data.role in ['admin', 'qa', 'dev', 'pendente']
+        && request.resource.data.roleAlteradoPor == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // Cadastros do QA: privados para o dev.
+    match /modulos/{id} {
+      allow read: if isQA();
+      allow create, update: if isQA()
+        && request.resource.data.nome is string
+        && request.resource.data.nome.size() > 0
+        && request.resource.data.nome.size() <= 120;
+      allow delete: if isQA();
+    }
+
+    match /ocorrencias/{id} {
+      allow read: if isQA();
+      allow create: if isQA()
+        && request.resource.data.titulo is string
+        && request.resource.data.titulo.size() > 0
+        && request.resource.data.tipo in ['erro', 'melhoria']
+        && request.resource.data.prioridade in ['normal', 'alta', 'baixa']
+        && request.resource.data.criadoPor == request.auth.uid;
+      allow update: if isQA()
+        && request.resource.data.tipo in ['erro', 'melhoria']
+        && request.resource.data.prioridade in ['normal', 'alta', 'baixa']
+        && request.resource.data.criadoPor == resource.data.criadoPor;
+      allow delete: if isQA();
+    }
+
+    // Lotes: o QA cria e exclui; o dev só lê e marca o progresso.
+    match /lotes/{loteId} {
+      allow read: if isQA() || isDev();
+      allow create: if isQA() && request.resource.data.criadoPor == request.auth.uid;
+      allow update: if isQA();
+      allow delete: if isQA();
+
+      match /progresso/{fixKey} {
+        allow read: if isQA() || isDev();
+        allow create, update: if (isQA() || isDev())
+          && request.resource.data.keys().hasOnly(['feito', 'por', 'em'])
+          && request.resource.data.feito == true
+          && request.resource.data.por == request.auth.uid;
+        allow delete: if isQA() || isDev();
+      }
+    }
+
+    // Prints das ocorrências em base64 (um documento por imagem, até ~1 MB).
+    // QA envia e apaga; QA e dev visualizam (aparecem nos lotes). Não são editados.
+    match /prints/{id} {
+      allow read: if isQA() || isDev();
+      allow create: if isQA()
+        && request.resource.data.keys().hasOnly(['ocorrenciaId', 'nome', 'dados', 'criadoPor', 'criadoEm'])
+        && request.resource.data.criadoPor == request.auth.uid
+        && request.resource.data.ocorrenciaId is string
+        && request.resource.data.nome is string
+        && request.resource.data.dados is string
+        && request.resource.data.dados.size() <= 1000000
+        && request.resource.data.dados.matches('data:image/[a-z+.-]+;base64,.*');
+      allow update: if false;
+      allow delete: if isQA();
+    }
+
+    // Listener de progresso via collectionGroup.
+    match /{path=**}/progresso/{fixKey} {
+      allow read: if isQA() || isDev();
+    }
+  }
+}
