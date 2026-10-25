@@ -1,121 +1,114 @@
 import type { ReactNode } from 'react'
-import { Check, ChevronDown } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
-import { FixBody } from '@/components/FixBody'
 import { cn } from '@/lib/utils'
-import type { CorpoFix } from '@/types'
+import type { Assunto } from '@/lib/assuntos'
 
-/** Card expansível de uma ocorrência/fix, com barra lateral em gradiente. */
+/** Seta de expandir/recolher. */
+export function Chevron({ aberto }: { aberto: boolean }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={cn('flex-none self-center text-q-muted transition-transform duration-200', !aberto && '-rotate-90')}
+    >
+      <path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function Check({ size = 12, className }: { size?: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M3 8.5l3.2 3L13 4.5" />
+    </svg>
+  )
+}
+
+/**
+ * Cartão expansível de uma ocorrência ou item do lote: barra colorida à esquerda, marcador
+ * (seleção ou concluído), cabeçalho clicável e corpo quando aberto.
+ */
 export function FixCard({
-  f,
+  barra,
+  marcador,
+  cabecalho,
   aberto,
   onToggle,
-  marcador,
-  etiqueta,
-  extras,
-  rodape,
-  concluido = false,
-  vazioTxt,
+  children,
+  raio = 12,
+  apagado = false,
 }: {
-  f: CorpoFix
+  barra: string
+  marcador: ReactNode
+  cabecalho: ReactNode
   aberto: boolean
   onToggle: () => void
-  marcador: ReactNode
-  etiqueta: ReactNode
-  extras?: ReactNode
-  rodape?: ReactNode
-  concluido?: boolean
-  vazioTxt?: string
+  children?: ReactNode
+  raio?: 10 | 12
+  apagado?: boolean
 }) {
-  const vazio = !f.onde && !f.atual && !f.passos.length && !f.esperado.length && !f.obs && !f.erro && !f.prints.length
   return (
-    <Collapsible open={aberto} onOpenChange={onToggle} asChild>
-      <article
-        className={cn(
-          'relative overflow-hidden rounded-[10px] border bg-card transition-opacity',
-          concluido && 'opacity-[.72]',
-        )}
-      >
-        <span className={cn('absolute inset-y-0 left-0 w-1', concluido ? 'bg-sucesso' : 'bg-brand-v')} aria-hidden />
-        <div className="flex items-start gap-3 py-3.5 pr-[18px] pl-5">
-          {marcador}
-          <button
-            onClick={onToggle}
-            aria-expanded={aberto}
-            className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2.5 gap-y-1 text-left text-inherit"
-          >
-            {etiqueta}
-            <span
-              className={cn(
-                'flex-[1_1_300px] text-[1.02rem] leading-[1.4] font-semibold',
-                concluido && 'line-through decoration-muted-foreground',
-              )}
-            >
-              {f.titulo || 'Sem título'}
-            </span>
-            {f.prioridade === 'alta' && (
-              <Badge variant="pendente" className="h-auto px-2.5 py-0.5 text-[.78rem]">
-                Prioridade alta
-              </Badge>
-            )}
-            {extras}
-            <ChevronDown
-              className={cn(
-                'size-4 flex-none self-center text-muted-foreground transition-transform duration-200',
-                !aberto && '-rotate-90',
-              )}
-            />
-          </button>
-        </div>
-        <CollapsibleContent>
-          <div className="pr-[18px] pb-[18px] pl-14">
-            {vazio && vazioTxt ? <p className="m-0 text-[.92rem] text-muted-foreground">{vazioTxt}</p> : <FixBody f={f} />}
-            {rodape}
-          </div>
-        </CollapsibleContent>
-      </article>
-    </Collapsible>
-  )
-}
-
-/** Círculo de seleção (QA) ou checkbox de concluído (dev). */
-export function Marcador({
-  ativo,
-  onClick,
-  forma,
-  label,
-}: {
-  ativo: boolean
-  onClick: () => void
-  forma: 'circulo' | 'quadrado'
-  label: string
-}) {
-  const ok = forma === 'quadrado'
-  return (
-    <button
-      onClick={onClick}
-      aria-label={label}
-      aria-pressed={ativo}
+    <article
       className={cn(
-        'mt-px grid size-6 flex-none place-items-center border-2 p-0 transition-colors',
-        ok ? 'rounded-md' : 'rounded-full',
-        ativo ? (ok ? 'border-sucesso bg-sucesso' : 'border-primary bg-primary') : 'border-primary bg-card',
+        'relative overflow-hidden border border-q-line bg-q-card transition-[box-shadow,opacity] duration-200 hover:shadow-[0_6px_18px_rgba(17,20,48,.08)]',
+        raio === 10 ? 'rounded-[10px]' : 'rounded-xl',
+        apagado && 'opacity-[.78]',
       )}
     >
-      {ativo && <Check className="size-3 text-white" strokeWidth={3.5} />}
-    </button>
+      <span className="absolute inset-y-0 left-0 w-1" style={{ background: barra }} aria-hidden />
+      <div className="flex items-start gap-3 py-3.5 pr-[18px] pl-5">
+        {marcador}
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={aberto}
+          className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2.5 gap-y-1 bg-transparent p-0 text-left text-inherit"
+        >
+          {cabecalho}
+          <Chevron aberto={aberto} />
+        </button>
+      </div>
+      {aberto && <div className="pr-[18px] pb-[18px] pl-14">{children}</div>}
+    </article>
   )
 }
 
-export function TipoTag({ tipo }: { tipo: CorpoFix['tipo'] }) {
-  return tipo === 'erro' ? (
-    <Badge variant="tag" className="h-auto bg-erro-bg px-[7px] py-0.5 text-erro">
-      ERRO
-    </Badge>
-  ) : (
-    <Badge variant="tag" className="h-auto bg-melhoria-bg px-[7px] py-0.5 text-melhoria">
-      MELHORIA
-    </Badge>
+/** Título do item no cabeçalho do cartão. */
+export function TituloFix({ children }: { children: ReactNode }) {
+  return <span className="flex-[1_1_300px] text-[1.02rem] leading-[1.4] font-semibold">{children}</span>
+}
+
+/** Etiqueta "Prioridade alta". */
+export function Alta() {
+  return <span className="rounded-full bg-q-warn-bg px-2.5 py-0.5 text-[.78rem] font-semibold text-q-warn">Prioridade alta</span>
+}
+
+/** Etiqueta de assunto (bolinha colorida + nome), usada na visão em lista. */
+export function TagAssunto({ a }: { a: Assunto }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-q-line px-[9px] py-px text-[.78rem] font-semibold text-q-muted">
+      <span className="size-2 rounded-full" style={{ background: a.cor }} />
+      {a.nome}
+    </span>
+  )
+}
+
+/** Cabeçalho do grupo de assunto (ícone, nome, contagem e linha). */
+export function CabecalhoAssunto({ a, txt, primeiro }: { a: Assunto; txt: string; primeiro: boolean }) {
+  return (
+    <div className={cn('flex items-center gap-3', !primeiro && 'mt-[22px]')}>
+      <span
+        className="grid size-[34px] flex-none place-items-center rounded-[10px] font-mono text-[.74rem] font-semibold text-navy-deep"
+        style={{ background: a.cor }}
+      >
+        {a.ini}
+      </span>
+      <span className="flex flex-col leading-tight">
+        <span className="text-[1.05rem] font-semibold">{a.nome}</span>
+        <span className="text-[.8rem] text-q-muted">{txt}</span>
+      </span>
+      <span className="h-px flex-1 bg-q-line" />
+    </div>
   )
 }

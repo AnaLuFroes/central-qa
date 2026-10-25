@@ -26,6 +26,16 @@ const buttonVariants = cva(
           "border-border bg-transparent text-muted-foreground hover:border-destructive hover:text-destructive",
         glass:
           "border-white/20 bg-white/5 text-[#E3E4F7] hover:bg-white/12",
+        /* Padrão da Central de QA: radius 8, borda da linha, texto apagado */
+        linha:
+          "rounded-md border-q-line bg-q-card font-semibold text-q-muted hover:border-q-accent hover:text-q-accent",
+        primario:
+          "rounded-md bg-brand font-semibold text-navy-deep hover:brightness-105 hover:saturate-110",
+        perigo:
+          "rounded-md border-q-line bg-transparent font-semibold text-q-muted hover:border-q-red hover:text-q-red",
+        /* Telas escuras (login, conta, sistemas) */
+        marinho:
+          "rounded-[10px] border-white/18 bg-white/6 font-semibold text-[#E3E4F7] hover:bg-white/12",
       },
       size: {
         default:
@@ -39,6 +49,10 @@ const buttonVariants = cva(
         "icon-sm":
           "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
         "icon-lg": "size-9",
+        /* tamanhos do protótipo */
+        acao: "h-auto gap-1.5 px-[18px] py-[9px] text-[.92rem]",
+        mini: "h-auto gap-1.5 px-3.5 py-1.5 text-[.86rem]",
+        modal: "h-auto gap-1.5 px-[18px] py-[7px] text-[.92rem]",
       },
     },
     defaultVariants: {

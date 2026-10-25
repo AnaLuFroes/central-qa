@@ -1,93 +1,180 @@
 rules_version = '2';
 
-// Níveis de acesso pelo campo `role` de users/{uid}: admin | qa | dev | pendente.
-// O nível é alterado direto no console do Firestore (ou pelo admin na tela de usuários).
+// Central de QA: várias empresas, cada uma com os dados em orgs/{orgId}/...
+// - Administradores da plataforma (users/{uid}.superAdmin == true, marcado à mão no console)
+//   aprovam, suspendem e reativam empresas. Não leem os dados internos delas.
+// - O perfil da pessoa na empresa (Admin | QA | Dev) fica em orgs/{orgId}/membros/{email}.
+//   Só vale com o e-mail verificado e com a empresa ativa.
 service cloud.firestore {
   match /databases/{database}/documents {
-    function perfil() { return /databases/$(database)/documents/users/$(request.auth.uid); }
-    function role() {
-      return request.auth == null ? null
-        : exists(perfil()) ? get(perfil()).data.get('role', 'pendente') : 'pendente';
-    }
-    function isAdmin() { return role() == 'admin'; }
-    function isQA() { return role() in ['admin', 'qa']; }
-    function isDev() { return role() == 'dev'; }
+    function logado() { return request.auth != null; }
+    function meuEmail() { return request.auth.token.email.lower(); }
+    function verificado() { return logado() && request.auth.token.email_verified == true; }
+    function eu() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function superAdmin() { return logado() && exists(eu()) && get(eu()).data.get('superAdmin', false) == true; }
 
-    // Perfis: cada um cria o próprio no primeiro acesso, sempre como pendente.
-    // Só o admin muda o nível dos outros; ninguém muda o próprio.
+    function orgP(o) { return /databases/$(database)/documents/orgs/$(o); }
+    function membroP(o) { return /databases/$(database)/documents/orgs/$(o)/membros/$(meuEmail()); }
+    function souMembro(o) { return verificado() && exists(membroP(o)); }
+    function perfil(o) { return souMembro(o) ? get(membroP(o)).data.perfil : ''; }
+    function ativa(o) { return get(orgP(o)).data.status == 'ativa'; }
+    function membroAtivo(o) { return souMembro(o) && ativa(o); }
+    function qa(o) { return perfil(o) in ['QA', 'Admin'] && ativa(o); }
+    function dev(o) { return perfil(o) == 'Dev' && ativa(o); }
+    function admin(o) { return perfil(o) == 'Admin' && ativa(o); }
+    // Empresa sendo criada nesta mesma gravação pelo próprio dono (cadastro).
+    function criandoMinhaOrg(o) {
+      return logado() && !exists(orgP(o)) && existsAfter(orgP(o)) && getAfter(orgP(o)).data.donoUid == request.auth.uid;
+    }
+
+    function novo() { return request.resource.data; }
+    function mudou() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function texto(v, max) { return v is string && v.size() > 0 && v.size() <= max; }
+
+    // Conta: cada um cria e edita a própria. A empresa só pode ser gravada se houver vínculo:
+    // convite para o e-mail (verificado) ou a empresa que a pessoa acabou de criar.
+    function vinculoValido(o) {
+      return o == null || (
+        existsAfter(/databases/$(database)/documents/orgs/$(o)/membros/$(meuEmail()))
+        && (verificado() || getAfter(orgP(o)).data.donoUid == request.auth.uid)
+      );
+    }
     match /users/{uid} {
-      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
-      allow create: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['email', 'nome', 'foto', 'role', 'criadoEm'])
-        && request.resource.data.role == 'pendente';
-      allow update: if isAdmin() && request.auth.uid != uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'roleAlteradoPor', 'roleAlteradoEm'])
-        && request.resource.data.role in ['admin', 'qa', 'dev', 'pendente']
-        && request.resource.data.roleAlteradoPor == request.auth.uid;
+      allow read: if logado() && request.auth.uid == uid;
+      allow create: if logado() && request.auth.uid == uid
+        && novo().keys().hasOnly(['email', 'nome', 'foto', 'orgId', 'criadoEm'])
+        && vinculoValido(novo().get('orgId', null));
+      allow update: if logado() && request.auth.uid == uid
+        && mudou().hasOnly(['orgId', 'nome', 'foto'])
+        && vinculoValido(novo().get('orgId', null));
       allow delete: if false;
     }
 
-    // Cadastros do QA: privados para o dev.
-    match /modulos/{id} {
-      allow read: if isQA();
-      allow create, update: if isQA()
-        && request.resource.data.nome is string
-        && request.resource.data.nome.size() > 0
-        && request.resource.data.nome.size() <= 120;
-      allow delete: if isQA();
+    // Convites do meu e-mail em qualquer empresa (primeiro acesso).
+    match /{path=**}/membros/{email} {
+      allow read: if verificado() && resource.data.email == meuEmail();
     }
 
-    match /ocorrencias/{id} {
-      allow read: if isQA();
-      allow create: if isQA()
-        && request.resource.data.titulo is string
-        && request.resource.data.titulo.size() > 0
-        && request.resource.data.tipo in ['erro', 'melhoria']
-        && request.resource.data.prioridade in ['normal', 'alta', 'baixa']
-        && request.resource.data.criadoPor == request.auth.uid;
-      allow update: if isQA()
-        && request.resource.data.tipo in ['erro', 'melhoria']
-        && request.resource.data.prioridade in ['normal', 'alta', 'baixa']
-        && request.resource.data.criadoPor == resource.data.criadoPor;
-      allow delete: if isQA();
-    }
+    match /orgs/{o} {
+      allow read: if superAdmin() || souMembro(o) || (logado() && resource.data.donoUid == request.auth.uid);
+      allow list: if superAdmin();
+      allow create: if logado()
+        && novo().keys().hasOnly(['nome', 'status', 'donoUid', 'donoEmail', 'criadoEm'])
+        && texto(novo().nome, 120)
+        && novo().status == 'pendente'
+        && novo().donoUid == request.auth.uid
+        && novo().donoEmail == meuEmail();
+      allow update: if superAdmin()
+        && mudou().hasOnly(['status', 'aprovadoPor', 'aprovadoEm'])
+        && novo().status in ['pendente', 'ativa', 'suspensa'];
+      allow delete: if false;
 
-    // Lotes: o QA cria e exclui; o dev só lê e marca o progresso.
-    match /lotes/{loteId} {
-      allow read: if isQA() || isDev();
-      allow create: if isQA() && request.resource.data.criadoPor == request.auth.uid;
-      allow update: if isQA();
-      allow delete: if isQA();
-
-      match /progresso/{fixKey} {
-        allow read: if isQA() || isDev();
-        allow create, update: if (isQA() || isDev())
-          && request.resource.data.keys().hasOnly(['feito', 'por', 'em'])
-          && request.resource.data.feito == true
-          && request.resource.data.por == request.auth.uid;
-        allow delete: if isQA() || isDev();
+      // Equipe: o Admin convida, muda perfis e remove. O dono da conta é sempre Admin.
+      // A própria pessoa liga a conta ao convite e muda o nome e a foto.
+      match /membros/{email} {
+        function dono() { return get(orgP(o)).data.donoEmail; }
+        allow read: if admin(o) || (logado() && email == meuEmail());
+        allow create: if (
+            admin(o)
+            && email == novo().email && texto(email, 200)
+            && novo().perfil in ['Admin', 'QA', 'Dev']
+            && novo().uid == null
+          ) || (
+            criandoMinhaOrg(o) && email == meuEmail()
+            && novo().perfil == 'Admin' && novo().uid == request.auth.uid
+          );
+        allow update: if (
+            admin(o) && email != dono()
+            && mudou().hasOnly(['perfil', 'nome'])
+            && novo().perfil in ['Admin', 'QA', 'Dev']
+          ) || (
+            logado() && email == meuEmail() && (verificado() || get(orgP(o)).data.donoUid == request.auth.uid)
+            && mudou().hasOnly(['uid', 'nome', 'foto'])
+            && novo().uid == request.auth.uid
+          );
+        allow delete: if admin(o) && email != dono() && email != meuEmail();
       }
-    }
 
-    // Prints das ocorrências em base64 (um documento por imagem, até ~1 MB).
-    // QA envia e apaga; QA e dev visualizam (aparecem nos lotes). Não são editados.
-    match /prints/{id} {
-      allow read: if isQA() || isDev();
-      allow create: if isQA()
-        && request.resource.data.keys().hasOnly(['ocorrenciaId', 'nome', 'dados', 'criadoPor', 'criadoEm'])
-        && request.resource.data.criadoPor == request.auth.uid
-        && request.resource.data.ocorrenciaId is string
-        && request.resource.data.nome is string
-        && request.resource.data.dados is string
-        && request.resource.data.dados.size() <= 1000000
-        && request.resource.data.dados.matches('data:image/[a-z+.-]+;base64,.*');
-      allow update: if false;
-      allow delete: if isQA();
-    }
+      match /sistemas/{id} {
+        allow read: if membroAtivo(o);
+        allow create: if (admin(o) || criandoMinhaOrg(o)) && texto(novo().nome, 80) && texto(novo().ini, 4);
+        // O QA só avança o contador de códigos e troca a capa.
+        allow update: if (admin(o) && texto(novo().nome, 80) && texto(novo().ini, 4))
+          || (qa(o) && mudou().hasOnly(['seq', 'capa']));
+        allow delete: if admin(o);
+      }
 
-    // Listener de progresso via collectionGroup.
-    match /{path=**}/progresso/{fixKey} {
-      allow read: if isQA() || isDev();
+      match /modulos/{id} {
+        allow read: if qa(o);
+        allow create, update: if qa(o) && texto(novo().nome, 120) && novo().sis is string;
+        allow delete: if qa(o);
+      }
+
+      match /ocorrencias/{id} {
+        allow read: if qa(o);
+        allow create: if qa(o)
+          && texto(novo().titulo, 400)
+          && novo().tipo in ['erro', 'melhoria']
+          && novo().prioridade in ['normal', 'alta', 'baixa']
+          && novo().criadoPor == request.auth.uid;
+        allow update: if qa(o)
+          && novo().tipo in ['erro', 'melhoria']
+          && novo().prioridade in ['normal', 'alta', 'baixa']
+          && novo().criadoPor == resource.data.criadoPor
+          && novo().cod == resource.data.cod;
+        allow delete: if qa(o);
+      }
+
+      // Lotes: o QA cria e exclui; o dev lê.
+      match /lotes/{id} {
+        allow read: if membroAtivo(o);
+        allow create: if qa(o) && novo().criadoPor == request.auth.uid;
+        allow update, delete: if qa(o);
+      }
+
+      // Respostas do dev a cada item do lote, com a conversa entre dev e QA.
+      match /respostas/{id} {
+        allow read: if membroAtivo(o);
+        allow create, update: if (dev(o) || qa(o))
+          && novo().keys().hasOnly(['loteId', 'key', 'sis', 'st', 'pr', 'com', 'em', 'thread'])
+          && id == novo().loteId + '__' + novo().key
+          && exists(/databases/$(database)/documents/orgs/$(o)/lotes/$(novo().loteId));
+        allow delete: if qa(o);
+      }
+
+      match /features/{id} {
+        allow read, delete: if qa(o);
+        allow create, update: if qa(o) && novo().tipo in ['ca', 'casos'] && novo().gherkin is string;
+      }
+
+      match /rodadas/{id} {
+        allow read, delete: if qa(o);
+        allow create, update: if qa(o) && texto(novo().nome, 200);
+      }
+
+      // Prints em base64 (um documento por imagem, até ~1 MB). QA envia e apaga; todos os membros veem.
+      match /prints/{id} {
+        allow read: if membroAtivo(o);
+        allow create: if qa(o)
+          && novo().keys().hasOnly(['ocorrenciaId', 'nome', 'dados', 'criadoPor', 'criadoEm'])
+          && novo().criadoPor == request.auth.uid
+          && novo().ocorrenciaId is string
+          && novo().nome is string
+          && novo().dados is string
+          && novo().dados.size() <= 1000000
+          && novo().dados.matches('data:image/[a-z+.-]+;base64,.*');
+        allow update: if false;
+        allow delete: if qa(o);
+      }
+
+      // Configuração de IA da empresa: QA e Admin usam; só o Admin grava.
+      match /config/ia {
+        allow read: if qa(o);
+        allow write: if admin(o)
+          && novo().keys().hasOnly(['provedor', 'modelo', 'apiKey', 'baseURL', 'atualizadoPor', 'em'])
+          && novo().provedor in ['anthropic', 'openai', 'google', 'compat']
+          && novo().atualizadoPor == request.auth.uid;
+      }
     }
   }
 }

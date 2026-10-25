@@ -1,15 +1,17 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import type { Role } from '@/types'
+import type { Perfil } from '@/types'
 
+/** Quem está logado e em qual empresa (espelho do AuthProvider). */
 export interface PerfilState {
   uid: string | null
   nome: string
   email: string
   foto: string
-  role: Role | null
+  orgId: string | null
+  perfil: Perfil | null
 }
 
-const initialState: PerfilState = { uid: null, nome: '', email: '', foto: '', role: null }
+const initialState: PerfilState = { uid: null, nome: '', email: '', foto: '', orgId: null, perfil: null }
 
 const authSlice = createSlice({
   name: 'auth',

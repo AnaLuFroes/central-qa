@@ -1,39 +1,65 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { lazy, Suspense } from 'react'
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
-import { RequireRole } from '@/auth/RequireRole'
-import { homeFor } from '@/auth/roles'
+import { RequireRole, RequireSuperAdmin, useHome } from '@/auth/RequireRole'
 import { Carregando } from '@/components/Carregando'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { lazy, Suspense } from 'react'
 import { SessionStore } from '@/store/SessionStore'
+import { ThemeProvider, ThemeToggle } from '@/theme/ThemeProvider'
 
-const DevHome = lazy(() => import('@/pages/DevHome'))
-const Login = lazy(() => import('@/pages/Login'))
-const Lote = lazy(() => import('@/pages/Lote'))
-const Lotes = lazy(() => import('@/pages/Lotes'))
-const Modulo = lazy(() => import('@/pages/Modulo'))
-const Modulos = lazy(() => import('@/pages/Modulos'))
-const Pendente = lazy(() => import('@/pages/Pendente'))
-const Usuarios = lazy(() => import('@/pages/admin/Usuarios'))
+const Splash = lazy(() => import('@/pages/Splash'))
+const Entrar = lazy(() => import('@/pages/Entrar'))
+const Cadastro = lazy(() => import('@/pages/Cadastro'))
+const Aguardando = lazy(() => import('@/pages/Aguardando'))
+const Empresas = lazy(() => import('@/pages/plataforma/Empresas'))
+const Sistemas = lazy(() => import('@/pages/Sistemas'))
+const SistemasGerenciar = lazy(() => import('@/pages/SistemasGerenciar'))
+const Conta = lazy(() => import('@/pages/Conta'))
+const LoteRedirect = lazy(() => import('@/pages/LoteRedirect'))
+const Layout = lazy(() => import('@/pages/app/Layout'))
+const Painel = lazy(() => import('@/pages/app/Painel'))
+const Modulos = lazy(() => import('@/pages/app/Modulos'))
+const Modulo = lazy(() => import('@/pages/app/Modulo'))
+const Casos = lazy(() => import('@/pages/app/Casos'))
+const Rodada = lazy(() => import('@/pages/app/Rodada'))
+const Lotes = lazy(() => import('@/pages/app/Lotes'))
+const Lote = lazy(() => import('@/pages/app/Lote'))
+const DevSistema = lazy(() => import('@/pages/app/DevSistema'))
+
+const QA = ['QA', 'Admin'] as const
+const TODOS = ['QA', 'Admin', 'Dev'] as const
 
 function Rotas() {
-  const { loading, user, role } = useAuth()
+  const { loading, user } = useAuth()
+  const home = useHome()
   if (loading) return <Carregando />
   return (
     <SessionStore>
       <Suspense fallback={<Carregando />}>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/pendente" element={user ? <Pendente /> : <Navigate to="/login" replace />} />
-        <Route path="/" element={<RequireRole roles={['admin', 'qa']}><Modulos /></RequireRole>} />
-        <Route path="/lotes" element={<RequireRole roles={['admin', 'qa']}><Lotes /></RequireRole>} />
-        <Route path="/modulos/:id" element={<RequireRole roles={['admin', 'qa']}><Modulo /></RequireRole>} />
-        <Route path="/dev" element={<RequireRole roles={['dev']}><DevHome /></RequireRole>} />
-        <Route path="/lote/:id" element={<RequireRole roles={['admin', 'qa', 'dev']}><Lote /></RequireRole>} />
-        <Route path="/admin/usuarios" element={<RequireRole roles={['admin']}><Usuarios /></RequireRole>} />
-        <Route path="*" element={<Navigate to={user ? homeFor(role) : '/login'} replace />} />
-      </Routes>
+        <Routes>
+          <Route path="/" element={user ? <Navigate to={home} replace /> : <Splash />} />
+          <Route path="/entrar" element={<Entrar />} />
+          <Route path="/cadastro" element={<Cadastro />} />
+          <Route path="/aguardando" element={user ? <Aguardando /> : <Navigate to="/entrar" replace />} />
+          <Route path="/plataforma/empresas" element={<RequireSuperAdmin><Empresas /></RequireSuperAdmin>} />
+          <Route path="/sistemas" element={<RequireRole perfis={[...TODOS]}><Sistemas /></RequireRole>} />
+          <Route path="/sistemas/gerenciar" element={<RequireRole perfis={['Admin']}><SistemasGerenciar /></RequireRole>} />
+          <Route path="/conta" element={<RequireRole perfis={[...TODOS]}><Conta /></RequireRole>} />
+          <Route path="/lote/:id" element={<RequireRole perfis={[...TODOS]}><LoteRedirect /></RequireRole>} />
+          <Route path="/s/:sis" element={<RequireRole perfis={[...TODOS]}><Layout /></RequireRole>}>
+            <Route index element={<Navigate to="painel" replace />} />
+            <Route path="painel" element={<RequireRole perfis={[...QA]}><Painel /></RequireRole>} />
+            <Route path="modulos" element={<RequireRole perfis={[...QA]}><Modulos /></RequireRole>} />
+            <Route path="modulos/:nome" element={<RequireRole perfis={[...QA]}><Modulo /></RequireRole>} />
+            <Route path="casos" element={<RequireRole perfis={[...QA]}><Casos /></RequireRole>} />
+            <Route path="rodadas/:id" element={<RequireRole perfis={[...QA]}><Rodada /></RequireRole>} />
+            <Route path="lotes" element={<RequireRole perfis={[...QA]}><Lotes /></RequireRole>} />
+            <Route path="lotes/:id" element={<Lote />} />
+            <Route path="dev" element={<RequireRole perfis={['Dev']}><DevSistema /></RequireRole>} />
+          </Route>
+          <Route path="*" element={<Navigate to={user ? home : '/'} replace />} />
+        </Routes>
       </Suspense>
     </SessionStore>
   )
@@ -42,12 +68,15 @@ function Rotas() {
 export default function App() {
   return (
     <BrowserRouter>
-      <AuthProvider>
-        <TooltipProvider>
-          <Rotas />
-          <Toaster position="bottom-center" />
-        </TooltipProvider>
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <TooltipProvider>
+            <Rotas />
+            <ThemeToggle />
+            <Toaster position="bottom-center" />
+          </TooltipProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   )
 }

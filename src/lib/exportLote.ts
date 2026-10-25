@@ -1,13 +1,34 @@
 // "Baixar HTML": gera uma página autocontida do lote, para mandar um lote isolado ao dev.
 import { carregarPrint } from '@/data/prints'
-import { esperadoItens, fixCode, fmtData } from '@/lib/format'
-import type { Lote } from '@/types'
+import { esperadoItens, fixCode, fmtData, fmtDH } from '@/lib/format'
+import { REPRO, RESP } from '@/lib/status'
+import type { ItemLote, Lote, Resposta, Respostas } from '@/types'
 
 const esc = (s: string) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 
-/** `imgs`: id do print -> data URL (as imagens vão embutidas no HTML). */
-export function loteHtml(l: Lote, imgs: Record<string, string>): string {
+function contextoHtml(f: ItemLote): string {
+  const c: [string, string][] = []
+  if (f.amb) c.push(['Ambiente', f.amb])
+  if (f.repro) c.push(['Reprodução', REPRO[f.repro] ?? f.repro])
+  if (f.massa) c.push(['Perfil e dados', f.massa])
+  if (f.cenario) c.push(['Cenário', (f.cenario.ca ? f.cenario.ca + ' · ' : '') + f.cenario.feat + ' › ' + f.cenario.titulo])
+  if (!c.length) return ''
+  return `<h4>Contexto do teste</h4><div class="ctx">${c.map(([k, v]) => `<div><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join('')}</div>`
+}
+
+function respostaHtml(r: Resposta | undefined): string {
+  if (!r?.thread.length) return ''
+  return `<h4>Conversa com o dev</h4>${r.thread
+    .map((m) => {
+      const st = m.st ? RESP[m.st][0] : ''
+      return `<div class="msg ${m.by}"><div class="mh"><b>${m.by === 'qa' ? 'QA' : 'Dev'}</b>${m.nome ? `<span>${esc(m.nome)}</span>` : ''}${st ? `<span class="st">${esc(st)}</span>` : ''}<span>${esc(fmtDH(m.em))}</span></div>${m.pr ? `<p class="pr2">${esc(m.pr)}</p>` : ''}${m.txt ? `<p>${esc(m.txt)}</p>` : ''}</div>`
+    })
+    .join('')}`
+}
+
+/** `imgs`: id do print -> data URL (as imagens vão embutidas no HTML). `resp`: respostas do dev ao lote. */
+export function loteHtml(l: Lote, imgs: Record<string, string>, resp: Record<string, Resposta> = {}): string {
   const secoes = l.secoes
     .map(
       (s) => `<section><div class="sh"><h2>${esc(s.nome)}</h2><span class="cnt" data-sec></span></div>${s.itens
@@ -15,7 +36,7 @@ export function loteHtml(l: Lote, imgs: Record<string, string>): string {
           const esp = esperadoItens(f.esperado)
           return `<article data-key="${esc(f.key)}"><span class="bar"></span><div class="hd">
 <button class="ck" aria-label="Marcar como concluído"></button>
-<span class="code">${esc(fixCode(f.key))}</span><span class="tt">${esc(f.titulo)}</span>${f.prioridade === 'alta' ? '<span class="alta">Prioridade alta</span>' : ''}</div>
+<span class="code">${esc(f.cod || fixCode(f.key))}</span><span class="tt">${esc(f.titulo)}</span>${f.prioridade === 'alta' ? '<span class="alta">Prioridade alta</span>' : ''}</div>
 <div class="bd">
 ${f.onde ? `<p class="onde"><b>Onde ocorre:</b> ${esc(f.onde)}</p>` : ''}
 ${f.passos.length ? `<h4>Como reproduzir</h4><ol>${f.passos.map((p, i) => `<li><span>${i + 1}</span>${esc(p)}</li>`).join('')}</ol>` : ''}
@@ -23,7 +44,9 @@ ${f.atual ? `<h4>Situação atual</h4><p>${esc(f.atual)}</p>` : ''}
 ${f.erro ? `<pre class="err">${esc(f.erro)}</pre>` : ''}
 ${esp.length ? `<h4>Ajuste esperado</h4>${esp.map((e) => (e.quote ? `<p class="q">${esc(e.t)}</p>` : `<div class="it"><i>•</i>${esc(e.t)}</div>`)).join('')}` : ''}
 ${f.obs ? `<p class="obs"><b>Observação:</b> ${esc(f.obs)}</p>` : ''}
-${f.prints.length ? `<h4>Prints</h4><div class="pr">${f.prints.filter((p) => imgs[p.id]).map((p) => `<img src="${esc(imgs[p.id])}" alt="${esc(p.nome)}">`).join('')}</div>` : ''}
+${contextoHtml(f)}
+${f.prints.length ? `<h4>Evidências</h4><div class="pr">${f.prints.filter((p) => imgs[p.id]).map((p) => `<img src="${esc(imgs[p.id])}" alt="${esc(p.nome)}">`).join('')}</div>` : ''}
+${respostaHtml(resp[f.key])}
 </div></article>`
         })
         .join('')}</section>`,
@@ -59,6 +82,10 @@ ol li{display:flex;gap:12px;margin-bottom:6px}ol li span{flex:none;width:22px;he
 .obs{background:#EEEAFD;border-radius:8px;padding:10px 12px;margin:14px 0 0}.pr{display:flex;gap:10px;flex-wrap:wrap}.pr img{height:110px;border:1px solid #E0DFF2;border-radius:8px}
 article.done{opacity:.72}article.done .bar{background:#0F7A55}article.done .ck{background:#0F7A55;border-color:#0F7A55}article.done .ck:after{content:"✓";color:#fff;font-weight:700}
 article.done .code{color:#0F7A55;background:#DDF2E8}article.done .tt{text-decoration:line-through}
+.ctx div{display:flex;gap:12px;font-size:.92rem}.ctx span:first-child{flex:none;width:118px;color:#5D6082}
+.msg{border:1px solid #E0DFF2;border-radius:10px;padding:10px 12px;margin-bottom:8px;max-width:72ch}.msg.qa{background:#EEEAFD;border-color:#EEEAFD}
+.mh{display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:.82rem;color:#5D6082}.mh b{color:#15172E}.st{font-weight:600;border-radius:99px;padding:2px 10px;background:#EFEEFA}
+.msg p{margin:6px 0 0;font-size:.92rem}.msg .pr2{font:.82rem "IBM Plex Mono",monospace;color:#5B45C8}
 footer{color:#5D6082;font-size:.92rem;padding:48px 0 30px;text-align:center}
 </style></head><body>
 <header><div class="w">${l.eyebrow ? `<p class="eb">${esc(l.eyebrow)}</p>` : ''}<h1>${esc(l.titulo)}</h1><p>${esc(l.intro)}</p></div></header>
@@ -74,11 +101,11 @@ document.querySelectorAll('.ck').forEach(b=>b.onclick=()=>{const k=b.closest('ar
 </script></body></html>`
 }
 
-export async function baixarLote(l: Lote) {
+export async function baixarLote(orgId: string, l: Lote, resp: Respostas) {
   const ids = [...new Set(l.secoes.flatMap((s) => s.itens.flatMap((f) => f.prints.map((p) => p.id))))]
   const imgs: Record<string, string> = {}
-  await Promise.all(ids.map(async (id) => (imgs[id] = await carregarPrint(id).catch(() => ''))))
-  const blob = new Blob([loteHtml(l, imgs)], { type: 'text/html;charset=utf-8' })
+  await Promise.all(ids.map(async (id) => (imgs[id] = await carregarPrint(orgId, id).catch(() => ''))))
+  const blob = new Blob([loteHtml(l, imgs, resp[l.id])], { type: 'text/html;charset=utf-8' })
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
   a.download = `${l.titulo.replace(/[\\/:*?"<>|]+/g, '-')}.html`

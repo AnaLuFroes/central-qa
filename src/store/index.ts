@@ -14,6 +14,7 @@ import { encryptTransform } from 'redux-persist-transform-encrypt'
 import auth from './slices/auth'
 import data from './slices/data'
 import drafts from './slices/drafts'
+import modal from './slices/modal'
 import ui from './slices/ui'
 
 /** Adaptador assíncrono de localStorage (o `redux-persist/lib/storage` é CJS e quebra no Vite). */
@@ -41,26 +42,26 @@ const storage = {
   },
 }
 
-const rootReducer = combineReducers({ auth, ui, drafts, data })
+const rootReducer = combineReducers({ auth, ui, drafts, data, modal })
 
 /**
- * Cria um store por usuário logado. O estado persistido fica em `persist:central-qa:<uid>`,
+ * Cria um store por usuário logado. O estado persistido fica em `persist:central-qa-v2:<uid>`,
  * cifrado com AES por uma chave própria do usuário (ver `chavePersistencia`).
- * `data` fica fora: o Firestore é a fonte da verdade e já tem cache offline.
+ * `data` fica fora: o Firestore é a fonte da verdade e já tem cache offline. `modal` também.
  */
 export function makeStore(uid: string, secretKey: string) {
   const persisted = persistReducer(
     {
-      key: `central-qa:${uid}`,
+      key: `central-qa-v2:${uid}`,
       version: 1,
       storage,
-      blacklist: ['data'],
+      blacklist: ['data', 'modal'],
       transforms: [
         encryptTransform({
           secretKey,
           onError: (err) => {
             console.warn('[persist] cache ilegível, descartando', err)
-            storage.removeItem(`persist:central-qa:${uid}`)
+            storage.removeItem(`persist:central-qa-v2:${uid}`)
           },
         }),
       ],

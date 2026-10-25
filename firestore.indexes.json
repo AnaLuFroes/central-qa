@@ -2,8 +2,8 @@
   "indexes": [],
   "fieldOverrides": [
     {
-      "collectionGroup": "progresso",
-      "fieldPath": "feito",
+      "collectionGroup": "membros",
+      "fieldPath": "email",
       "indexes": [
         { "order": "ASCENDING", "queryScope": "COLLECTION" },
         { "order": "ASCENDING", "queryScope": "COLLECTION_GROUP" }

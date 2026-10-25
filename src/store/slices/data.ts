@@ -1,33 +1,42 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit'
-import type { Lote, Modulo, Ocorrencia, Progresso, Usuario } from '@/types'
+import type { ConfigIA, Feature, Lote, Membro, Modulo, Ocorrencia, Respostas, Rodada, Sistema } from '@/types'
 
-/** Espelho em memória do Firestore, alimentado por onSnapshot. Não é persistido. */
+/** Espelho em memória do Firestore da empresa, alimentado por onSnapshot. Não é persistido. */
 export interface DataState {
+  sistemas: Sistema[]
   modulos: Modulo[]
   ocorrencias: Ocorrencia[]
   lotes: Lote[]
-  progresso: Progresso
-  usuarios: Usuario[]
-  carregado: { modulos: boolean; ocorrencias: boolean; lotes: boolean }
+  respostas: Respostas
+  features: Feature[]
+  rodadas: Rodada[]
+  membros: Membro[]
+  ia: ConfigIA | null
+  carregado: { sistemas: boolean; lotes: boolean; ocorrencias: boolean; rodadas: boolean }
 }
 
 const initialState: DataState = {
+  sistemas: [],
   modulos: [],
   ocorrencias: [],
   lotes: [],
-  progresso: {},
-  usuarios: [],
-  carregado: { modulos: false, ocorrencias: false, lotes: false },
+  respostas: {},
+  features: [],
+  rodadas: [],
+  membros: [],
+  ia: null,
+  carregado: { sistemas: false, lotes: false, ocorrencias: false, rodadas: false },
 }
 
 const dataSlice = createSlice({
   name: 'data',
   initialState,
   reducers: {
-    setModulos: (s, a: PayloadAction<Modulo[]>) => {
-      s.modulos = a.payload
-      s.carregado.modulos = true
+    setSistemas: (s, a: PayloadAction<Sistema[]>) => {
+      s.sistemas = a.payload
+      s.carregado.sistemas = true
     },
+    setModulos: (s, a: PayloadAction<Modulo[]>) => void (s.modulos = a.payload),
     setOcorrencias: (s, a: PayloadAction<Ocorrencia[]>) => {
       s.ocorrencias = a.payload
       s.carregado.ocorrencias = true
@@ -36,10 +45,28 @@ const dataSlice = createSlice({
       s.lotes = a.payload
       s.carregado.lotes = true
     },
-    setProgresso: (s, a: PayloadAction<Progresso>) => void (s.progresso = a.payload),
-    setUsuarios: (s, a: PayloadAction<Usuario[]>) => void (s.usuarios = a.payload),
+    setRespostas: (s, a: PayloadAction<Respostas>) => void (s.respostas = a.payload),
+    setFeatures: (s, a: PayloadAction<Feature[]>) => void (s.features = a.payload),
+    setRodadas: (s, a: PayloadAction<Rodada[]>) => {
+      s.rodadas = a.payload
+      s.carregado.rodadas = true
+    },
+    setMembros: (s, a: PayloadAction<Membro[]>) => void (s.membros = a.payload),
+    setIA: (s, a: PayloadAction<ConfigIA | null>) => void (s.ia = a.payload),
+    limparDados: () => initialState,
   },
 })
 
-export const { setModulos, setOcorrencias, setLotes, setProgresso, setUsuarios } = dataSlice.actions
+export const {
+  setSistemas,
+  setModulos,
+  setOcorrencias,
+  setLotes,
+  setRespostas,
+  setFeatures,
+  setRodadas,
+  setMembros,
+  setIA,
+  limparDados,
+} = dataSlice.actions
 export default dataSlice.reducer

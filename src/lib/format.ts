@@ -38,8 +38,9 @@ export const coverBg = (p: [string, string]) =>
   `radial-gradient(circle at 18% 12%, ${p[0]} 0, transparent 58%), radial-gradient(circle at 88% 100%, ${p[1]} 0, transparent 62%), #151936`
 export const swatchBg = (p: [string, string]) =>
   `radial-gradient(circle at 20% 15%, ${p[0]} 0, transparent 70%), radial-gradient(circle at 90% 100%, ${p[1]} 0, transparent 75%), #151936`
-export const heroBg = (p: [string, string]) =>
-  `radial-gradient(circle at 12% 0%, ${p[0]}80 0, transparent 55%), radial-gradient(circle at 95% 120%, ${p[1]}80 0, transparent 60%), #111430`
+/** Capa com imagem enviada (data URL) ou com a paleta. */
+export const capaBg = (capa: string | undefined, p: [string, string]) =>
+  capa ? `center/cover no-repeat url("${capa}")` : coverBg(p)
 
 export const initials = (n: string) => {
   const w = String(n || '')
@@ -52,8 +53,50 @@ export const initials = (n: string) => {
     .toUpperCase()
 }
 
+/** Iniciais do avatar de uma pessoa (no máximo 2 letras). */
+export const iniPessoa = (n: string) => initials(n).slice(0, 2) || String(n || '?')[0].toUpperCase()
+
+/** Sigla sugerida para um sistema a partir do nome. */
+export const autoIni = (n: string) => {
+  const w = String(n || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+  if (!w.length) return ''
+  if (w.length === 1) return w[0].replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase()
+  return w
+    .slice(0, 3)
+    .map((x) => x[0])
+    .join('')
+    .toUpperCase()
+}
+
 export const fmtData = (ms: number) =>
   new Date(ms).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+export const fmtDH = (ms: number) =>
+  new Date(ms).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+export const hojeEyebrow = () =>
+  new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).replace('.', '').toUpperCase()
+
+/** Texto sem acentos e em minúsculas, para buscas. */
+export const nq = (x: unknown) =>
+  String(x ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+
+export const slug = (s: string) =>
+  nq(s)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+
+export const tagList = (t: string) =>
+  String(t || '')
+    .split(/[\s,]+/)
+    .filter(Boolean)
+    .map((x) => (x.startsWith('@') ? x : '@' + x))
+
+export const emailValido = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)
 
 /** Linhas de "Ajuste esperado": as que começam com ">" são o texto exato que deve aparecer na tela. */
 export const esperadoItens = (esperado: string[]) =>
@@ -63,3 +106,15 @@ export const fixVazio = (f: Pick<CorpoFix, 'onde' | 'atual' | 'passos' | 'espera
   !f.onde && !f.atual && !f.passos.length && !f.esperado.length
 
 export const fixCode = (key: string) => key.replace('fix-', 'FIX ')
+
+/** Nome do módulo de uma ocorrência (vazio vira "Geral"). */
+export const modOf = (f: { modulo: string }) => (f.modulo || '').trim() || 'Geral'
+
+/** Lista "a, b e c". */
+export const listaE = (xs: string[]) => (xs.length > 1 ? xs.slice(0, -1).join(', ') + ' e ' + xs[xs.length - 1] : xs[0] || '')
+
+export const saudacao = (nome: string) => {
+  const hr = new Date().getHours()
+  const first = String(nome || '').split(' ')[0]
+  return (hr < 12 ? 'Bom dia' : hr < 18 ? 'Boa tarde' : 'Boa noite') + (first ? ', ' + first : '')
+}

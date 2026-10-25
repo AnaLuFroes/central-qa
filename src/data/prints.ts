@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
-import { addDoc, collection, deleteDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore'
-import { db } from '@/firebase'
+import { addDoc, deleteDoc, getDoc, serverTimestamp } from 'firebase/firestore'
 import type { Print } from '@/types'
+import { orgCol, orgDoc } from './conv'
 
 /**
- * Prints ficam na coleção `prints`, um documento por imagem, com a imagem em base64 (data URL)
+ * Prints ficam em orgs/{orgId}/prints, um documento por imagem, com a imagem em base64 (data URL)
  * no campo `dados`. A ocorrência e o lote guardam só a referência { id, nome }.
  * O Firestore limita cada documento a 1 MiB, então a imagem é reduzida e comprimida antes de salvar.
  */
-export const printsCol = collection(db, 'prints')
+export const printsCol = (orgId: string) => orgCol(orgId, 'prints')
 
 const MAX_ENTRADA = 25 * 1024 * 1024
 const MAX_DADOS = 900_000
@@ -36,21 +36,54 @@ async function paraBase64(file: File): Promise<string> {
   throw new Error('Não foi possível reduzir a imagem para salvar.')
 }
 
-export async function enviarPrint(ocorrenciaId: string, file: File, uid: string): Promise<Print> {
+/** Capa (sistema ou módulo): até 900 px de largura, JPEG. */
+export async function imagemCapa(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) throw new Error('Envie apenas imagens.')
+  const img = await createImageBitmap(file)
+  try {
+    const k = Math.min(1, 900 / img.width)
+    const c = document.createElement('canvas')
+    c.width = Math.round(img.width * k)
+    c.height = Math.round(img.height * k)
+    c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+    return c.toDataURL('image/jpeg', 0.85)
+  } finally {
+    img.close()
+  }
+}
+
+/** Foto de perfil: recorte quadrado de 256 px no centro, JPEG. */
+export async function imagemFoto(file: File): Promise<string> {
+  if (!file.type.startsWith('image/')) throw new Error('Envie apenas imagens.')
+  const img = await createImageBitmap(file)
+  try {
+    const S = 256
+    const m = Math.min(img.width, img.height)
+    const c = document.createElement('canvas')
+    c.width = S
+    c.height = S
+    c.getContext('2d')!.drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, S, S)
+    return c.toDataURL('image/jpeg', 0.86)
+  } finally {
+    img.close()
+  }
+}
+
+export async function enviarPrint(orgId: string, ocorrenciaId: string, file: File, uid: string): Promise<Print> {
   if (!file.type.startsWith('image/')) throw new Error('Envie apenas imagens.')
   if (file.size > MAX_ENTRADA) throw new Error('Imagem maior que 25 MB.')
   const nome = file.name || 'print.png'
   const dados = await paraBase64(file)
-  const ref = await addDoc(printsCol, { ocorrenciaId, nome, dados, criadoPor: uid, criadoEm: serverTimestamp() })
+  const ref = await addDoc(printsCol(orgId), { ocorrenciaId, nome, dados, criadoPor: uid, criadoEm: serverTimestamp() })
   cache.set(ref.id, Promise.resolve(dados))
   return { id: ref.id, nome }
 }
 
-export async function removerPrints(prints: Print[]) {
+export async function removerPrints(orgId: string, prints: Print[]) {
   await Promise.all(
     prints.map((p) => {
       cache.delete(p.id)
-      return deleteDoc(doc(printsCol, p.id)).catch(() => {})
+      return deleteDoc(orgDoc(orgId, 'prints', p.id)).catch(() => {})
     }),
   )
 }
@@ -58,10 +91,10 @@ export async function removerPrints(prints: Print[]) {
 const cache = new Map<string, Promise<string>>()
 
 /** Data URL do print (com cache em memória). */
-export function carregarPrint(id: string): Promise<string> {
+export function carregarPrint(orgId: string, id: string): Promise<string> {
   let p = cache.get(id)
   if (!p) {
-    p = getDoc(doc(printsCol, id)).then((s) => {
+    p = getDoc(orgDoc(orgId, 'prints', id)).then((s) => {
       const dados = s.get('dados')
       if (typeof dados !== 'string') throw new Error('Print não encontrado.')
       return dados
@@ -72,25 +105,17 @@ export function carregarPrint(id: string): Promise<string> {
   return p
 }
 
-export function usePrint(id: string): string | null {
+export function usePrint(orgId: string | null, id: string): string | null {
   const [src, setSrc] = useState<{ id: string; dados: string } | null>(null)
   useEffect(() => {
+    if (!orgId) return
     let vivo = true
-    carregarPrint(id)
+    carregarPrint(orgId, id)
       .then((dados) => vivo && setSrc({ id, dados }))
       .catch(() => {})
     return () => {
       vivo = false
     }
-  }, [id])
+  }, [orgId, id])
   return src?.id === id ? src.dados : null
-}
-
-/** Abre o print em uma aba nova (o navegador bloqueia abrir data URL direto). */
-export async function abrirPrint(id: string) {
-  const aba = window.open('', '_blank')
-  const blob = await (await fetch(await carregarPrint(id))).blob()
-  const url = URL.createObjectURL(blob)
-  if (aba) aba.location.href = url
-  else window.open(url, '_blank')
 }
