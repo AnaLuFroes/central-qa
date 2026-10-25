@@ -7,10 +7,12 @@
 @import "@fontsource/ibm-plex-sans/700.css";
 @import "@fontsource/ibm-plex-serif/600.css";
 @import "@fontsource/ibm-plex-serif/700.css";
+@import "@fontsource/ibm-plex-mono/400.css";
 @import "@fontsource/ibm-plex-mono/500.css";
 @import "@fontsource/ibm-plex-mono/600.css";
 
-@custom-variant dark (&:is(.dark *));
+/* Tema escuro: <html data-theme="dark"> (ver ThemeProvider) */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @theme inline {
   --font-sans: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif;
@@ -37,66 +39,160 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* Tokens da Central de QA */
-  --color-navy: var(--navy);
-  --color-navy-deep: var(--navy-deep);
-  --color-hero-text: var(--hero-text);
-  --color-track: var(--track);
-  --color-erro: var(--erro);
-  --color-erro-bg: var(--erro-bg);
-  --color-melhoria: var(--primary);
-  --color-melhoria-bg: var(--melhoria-bg);
-  --color-pendente: var(--pendente);
-  --color-pendente-bg: var(--pendente-bg);
-  --color-sucesso: var(--sucesso);
-  --color-sucesso-bg: var(--sucesso-bg);
+  /* Tokens da Central de QA (claro/escuro), usados como bg-q-*, text-q-*, border-q-* */
+  --color-q-bg: var(--cqa-bg);
+  --color-q-card: var(--cqa-card);
+  --color-q-line: var(--cqa-line);
+  --color-q-track: var(--cqa-track);
+  --color-q-soft: var(--cqa-soft);
+  --color-q-ink: var(--cqa-ink);
+  --color-q-muted: var(--cqa-muted);
+  --color-q-accent: var(--cqa-accent);
+  --color-q-chip: var(--cqa-chip);
+  --color-q-navy: var(--cqa-navy);
+  --color-q-red: var(--cqa-red);
+  --color-q-red-bg: var(--cqa-red-bg);
+  --color-q-red-line: var(--cqa-red-line);
+  --color-q-warn: var(--cqa-warn);
+  --color-q-warn-bg: var(--cqa-warn-bg);
+  --color-q-ok: var(--cqa-ok);
+  --color-q-ok-bg: var(--cqa-ok-bg);
+  --color-q-info: var(--cqa-info);
+  --color-q-info-bg: var(--cqa-info-bg);
+  /* Cores fixas da marca (iguais nos dois temas) */
+  --color-navy: #262a55;
+  --color-navy-deep: #111430;
+  --color-navy-card: #181c40;
+  --color-hero-text: #cfd1ee;
+  --color-cyan: #8ff0f2;
+  --color-lilac: #c39bf5;
+  --color-pink: #ff9ec7;
+  --color-gold: #ffc879;
 
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 10px;
   --radius-xl: 12px;
   --radius-2xl: 16px;
+  --radius-3xl: 20px;
 
   --shadow-card: 0 1px 2px rgba(17, 20, 48, 0.06), 0 6px 18px rgba(17, 20, 48, 0.08);
+  --shadow-float: 0 1px 2px rgba(17, 20, 48, 0.06), 0 22px 48px rgba(17, 20, 48, 0.14);
+
+  --animate-cqa-ring: cqaRing 3.6s ease-out infinite;
+  --animate-cqa-breath: cqaBreath 4.2s ease-in-out 1.1s infinite;
+  --animate-cqa-spin: cqaSpin 9s linear infinite;
+  --animate-cqa-in: cqaIn 1.1s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+  --animate-cqa-up: cqaUp 0.9s ease both;
+  --animate-cqa-blink: cqaBlink 2s ease-in-out infinite;
+  --animate-cqa-shine: cqaShine 4.5s ease-in-out 1.4s infinite;
+  --animate-cqa-float: cqaFloat 6s ease-in-out infinite;
+
+  @keyframes cqaRing {
+    0% { transform: scale(0.55); opacity: 0.85; }
+    100% { transform: scale(1.45); opacity: 0; }
+  }
+  @keyframes cqaBreath {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-8px) scale(1.03); }
+  }
+  @keyframes cqaSpin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes cqaIn {
+    0% { opacity: 0; transform: scale(0.6) rotate(-8deg); }
+    60% { opacity: 1; transform: scale(1.06) rotate(1deg); }
+    100% { opacity: 1; transform: scale(1) rotate(0); }
+  }
+  @keyframes cqaUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes cqaBlink {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+  }
+  @keyframes cqaFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-12px); }
+  }
+  @keyframes cqaShine {
+    0%, 55% { transform: translateX(-130%) skewX(-18deg); }
+    100% { transform: translateX(130%) skewX(-18deg); }
+  }
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: #f5f5fc;
-  --foreground: #15172e;
-  --card: #ffffff;
-  --card-foreground: #15172e;
-  --popover: #ffffff;
-  --popover-foreground: #15172e;
-  --primary: #5b45c8;
-  --primary-foreground: #ffffff;
-  --secondary: #eeeafd;
-  --secondary-foreground: #5b45c8;
-  --muted: #efeefa;
-  --muted-foreground: #5d6082;
-  --accent: #eeeafd;
-  --accent-foreground: #5b45c8;
-  --destructive: #b42336;
-  --border: #e0dff2;
-  --input: #e0dff2;
-  --ring: #5b45c8;
+  --cqa-bg: #f5f5fc;
+  --cqa-card: #ffffff;
+  --cqa-line: #e0dff2;
+  --cqa-track: #efeefa;
+  --cqa-soft: #eeeafd;
+  --cqa-ink: #15172e;
+  --cqa-muted: #5d6082;
+  --cqa-accent: #5b45c8;
+  --cqa-chip: #262a55;
+  --cqa-navy: #262a55;
+  --cqa-red: #b42336;
+  --cqa-red-bg: #fbe3e7;
+  --cqa-red-line: #f3b9c3;
+  --cqa-warn: #a8660c;
+  --cqa-warn-bg: #fbf0dd;
+  --cqa-ok: #0f7a55;
+  --cqa-ok-bg: #ddf2e8;
+  --cqa-info: #1f6fb2;
+  --cqa-info-bg: #e1eefb;
 
-  --navy: #262a55;
-  --navy-deep: #111430;
-  --hero-text: #cfd1ee;
-  --track: #efeefa;
-  --erro: #b42336;
-  --erro-bg: #fbe3e7;
-  --melhoria-bg: #eeeafd;
-  --pendente: #a8660c;
-  --pendente-bg: #fbf0dd;
-  --sucesso: #0f7a55;
-  --sucesso-bg: #ddf2e8;
+  --radius: 0.625rem;
+  --background: var(--cqa-bg);
+  --foreground: var(--cqa-ink);
+  --card: var(--cqa-card);
+  --card-foreground: var(--cqa-ink);
+  --popover: var(--cqa-card);
+  --popover-foreground: var(--cqa-ink);
+  --primary: var(--cqa-accent);
+  --primary-foreground: #ffffff;
+  --secondary: var(--cqa-soft);
+  --secondary-foreground: var(--cqa-accent);
+  --muted: var(--cqa-track);
+  --muted-foreground: var(--cqa-muted);
+  --accent: var(--cqa-soft);
+  --accent-foreground: var(--cqa-accent);
+  --destructive: var(--cqa-red);
+  --border: var(--cqa-line);
+  --input: var(--cqa-line);
+  --ring: var(--cqa-accent);
 
   --brand-gradient: linear-gradient(100deg, #8ff0f2 0%, #b4c8f8 50%, #c39bf5 100%);
   --brand-gradient-bar: linear-gradient(90deg, #5fd8e8, #a98bf5);
   --brand-gradient-v: linear-gradient(180deg, #8ff0f2, #b4c8f8 50%, #c39bf5);
   --hero-bg: radial-gradient(120% 140% at 50% 0%, #262a55 0%, #111430 72%);
+  --auth-bg: radial-gradient(120% 120% at 50% 0%, #262a55 0%, #111430 70%);
+  --topbar-bg: linear-gradient(90deg, rgba(38, 42, 85, 0.94), rgba(46, 51, 112, 0.94) 50%, rgba(38, 42, 85, 0.94));
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --cqa-bg: #111430;
+  --cqa-card: #181c40;
+  --cqa-line: rgba(255, 255, 255, 0.14);
+  --cqa-track: rgba(255, 255, 255, 0.08);
+  --cqa-soft: rgba(143, 240, 242, 0.1);
+  --cqa-ink: #ffffff;
+  --cqa-muted: #cfd1ee;
+  --cqa-accent: #8ff0f2;
+  --cqa-chip: #2e3370;
+  --cqa-navy: #b4c8f8;
+  --cqa-red: #ff9ec7;
+  --cqa-red-bg: rgba(255, 158, 199, 0.14);
+  --cqa-red-line: rgba(255, 158, 199, 0.4);
+  --cqa-warn: #ffc879;
+  --cqa-warn-bg: rgba(255, 200, 121, 0.14);
+  --cqa-ok: #7be0b8;
+  --cqa-ok-bg: rgba(123, 224, 184, 0.14);
+  --cqa-info: #9fb7ff;
+  --cqa-info-bg: rgba(159, 183, 255, 0.14);
+  --primary-foreground: #111430;
 }
 
 @layer base {
@@ -110,6 +206,7 @@
     @apply bg-background text-foreground;
     font-size: 15px;
     line-height: 1.6;
+    transition: background-color 0.25s;
   }
   button:not(:disabled),
   [role="button"]:not(:disabled) {
@@ -129,6 +226,12 @@
 @utility bg-hero {
   background: var(--hero-bg);
 }
+@utility bg-auth {
+  background: var(--auth-bg);
+}
+@utility bg-topbar {
+  background: var(--topbar-bg);
+}
 @utility text-brand {
   background-image: var(--brand-gradient);
   background-clip: text;
@@ -143,10 +246,21 @@
   background-size: 28px 28px;
   mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent 90%);
 }
+@utility auth-grid {
+  background-image:
+    linear-gradient(rgba(160, 170, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(160, 170, 255, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(circle at 50% 40%, #000 0, transparent 75%);
+}
 @utility cover-grid {
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.09) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.09) 1px, transparent 1px);
   background-size: 18px 18px;
   mask-image: radial-gradient(circle at 50% 50%, #000 0, transparent 75%);
+}
+/* Mola das abas deslizantes (dock e abas da conta) */
+@utility ease-mola {
+  transition-timing-function: cubic-bezier(0.5, 1.5, 0.45, 1);
 }

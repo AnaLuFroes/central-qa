@@ -13,7 +13,7 @@ const SessaoContext = createContext<{ sair: () => Promise<void> } | null>(null)
 
 /** Monta o store Redux (com persist cifrado) só depois do login, um por usuário. */
 export function SessionStore({ children }: { children: ReactNode }) {
-  const { user, role, sair } = useAuth()
+  const { user, membro, org, situacao, sair } = useAuth()
   const [sessao, setSessao] = useState<{ uid: string; store: AppStore; persistor: Persistor } | null>(null)
 
   useEffect(() => {
@@ -35,13 +35,14 @@ export function SessionStore({ children }: { children: ReactNode }) {
     sessao.store.dispatch(
       setPerfil({
         uid: user.uid,
-        nome: user.displayName || user.email || '',
+        nome: membro?.nome || user.displayName || user.email || '',
         email: user.email || '',
-        foto: user.photoURL || '',
-        role,
+        foto: membro?.foto || user.photoURL || '',
+        orgId: situacao === 'ok' ? org?.id ?? null : null,
+        perfil: situacao === 'ok' ? membro?.perfil ?? null : null,
       }),
     )
-  }, [sessao, user, role])
+  }, [sessao, user, membro, org, situacao])
 
   if (!user) return <>{children}</>
   if (!sessao || sessao.uid !== user.uid) return <Carregando />

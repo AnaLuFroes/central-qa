@@ -1,158 +1,147 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
+import { Campo, Modal, StatusModal } from '@/components/Modal'
 import { ModuleCover } from '@/components/ModuleCover'
-import { criarModulo, excluirModulo, salvarModulo } from '@/data/modulos'
-import { EMOJIS, PALS, hashStr, plural, swatchBg } from '@/lib/format'
+import { inputCls } from '@/components/qa'
+import { Button } from '@/components/ui/button'
+import { criarModulo, excluirModulo, salvarModulo, type DadosModulo } from '@/data/modulos'
+import { rotaModulo, useIr } from '@/hooks/useIr'
+import { useExecutar, useSessao } from '@/hooks/useSessao'
+import { EMOJIS, PALS, modOf, palIndex, plural, swatchBg } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAppSelector } from '@/store/hooks'
-import { moduloPorNome, selOcorrenciasPorModulo } from '@/store/slices/selectors'
-import type { Modulo } from '@/types'
+import type { Modal as TModal } from '@/store/slices/modal'
+import { selModulos, selOcorrencias } from '@/store/slices/selectors'
 
-export function ModuloDialog({
-  open,
-  modulo,
-  onClose,
-}: {
-  open: boolean
-  modulo: Modulo | null
-  onClose: () => void
-}) {
-  const modulos = useAppSelector((s) => s.data.modulos)
-  const porModulo = useAppSelector(selOcorrenciasPorModulo)
-  const nav = useNavigate()
-  const [nome, setNome] = useState('')
-  const [emoji, setEmoji] = useState('')
-  const [cor, setCor] = useState<number | null>(null)
+export default function ModuloDialog({ m, onClose }: { m: Extract<TModal, { kind: 'mod' }>; onClose: () => void }) {
+  const { orgId } = useSessao()
+  const exec = useExecutar()
+  const ir = useIr()
+  const { pathname } = useLocation()
+  const sis = useAppSelector((s) => s.ui.sis) ?? ''
+  const mods = useAppSelector(selModulos)
+  const todosMods = useAppSelector((s) => s.data.modulos)
+  const ocorrencias = useAppSelector((s) => s.data.ocorrencias)
+  const features = useAppSelector((s) => s.data.features)
+  const fixesSis = useAppSelector(selOcorrencias)
+  const orig = (m.moduloId && todosMods.find((x) => x.id === m.moduloId)) || (m.nome != null ? mods.find((x) => x.nome === m.nome) : undefined)
+  const [nome, setNome] = useState(orig?.nome ?? '')
+  const [emoji, setEmoji] = useState(orig?.emoji ?? '')
+  const [cor, setCor] = useState<number | null>(orig?.cor ?? null)
   const [status, setStatus] = useState('')
   const [salvando, setSalvando] = useState(false)
 
-  useEffect(() => {
-    if (!open) return
-    setNome(modulo?.nome ?? '')
-    setEmoji(modulo?.emoji ?? '')
-    setCor(modulo?.cor ?? null)
-    setStatus('')
-  }, [open, modulo])
-
   const nm = nome.trim() || 'Novo módulo'
-  const corAtual = (cor ?? hashStr(nm)) % PALS.length
+  const ci = palIndex({ nome: nm, cor })
+  const naPagina = !!orig && pathname === rotaModulo(sis, orig.nome)
 
   const salvar = async () => {
     const n = nome.trim()
     if (!n) return setStatus('Dê um nome ao módulo.')
-    const existente = moduloPorNome(modulos, n)
-    if (existente && existente.id !== modulo?.id) return setStatus('Já existe um módulo com esse nome.')
+    if (mods.some((x) => x.nome.toLowerCase() === n.toLowerCase() && x.nome !== orig?.nome))
+      return setStatus('Já existe um módulo com esse nome.')
+    const dados: DadosModulo = { nome: n, emoji, cor }
     setSalvando(true)
-    try {
-      if (modulo) await salvarModulo(modulo.id, { nome: n, emoji, cor })
-      else await criarModulo({ nome: n, emoji, cor })
-      toast.success('Módulo salvo')
-      onClose()
-    } catch (e) {
-      setStatus('Não foi possível salvar. ' + (e as Error).message)
-    } finally {
-      setSalvando(false)
-    }
+    const ok = await exec(
+      (async () => {
+        if (orig?.id) await salvarModulo(orgId, orig, dados, ocorrencias, features)
+        else if (orig) {
+          // Módulo que só existia pelo nome nas ocorrências: cadastra e renomeia junto, se for o caso.
+          const id = await criarModulo(orgId, sis, { nome: orig.nome, emoji, cor })
+          await salvarModulo(orgId, { ...orig, id }, dados, ocorrencias, features)
+        } else await criarModulo(orgId, sis, dados)
+        return true
+      })(),
+      'Módulo salvo',
+    )
+    setSalvando(false)
+    if (!ok) return
+    onClose()
+    if (naPagina && orig?.nome !== n) ir.modulo(n)
   }
 
   const excluir = async () => {
-    if (!modulo) return
-    const total = porModulo.get(modulo.id)?.length ?? 0
-    if (total)
-      return setStatus(`Mova ou exclua as ${plural(total, 'ocorrência', 'ocorrências')} deste módulo antes de excluí-lo.`)
-    await excluirModulo(modulo.id)
-    toast.success('Módulo excluído')
+    if (!orig) return
+    const total = fixesSis.filter((f) => modOf(f) === orig.nome).length
+    if (total) return setStatus('Mova ou exclua as ' + plural(total, 'ocorrência', 'ocorrências') + ' deste módulo antes de excluí-lo.')
+    if (orig.id && !(await exec(excluirModulo(orgId, orig.id).then(() => true), 'Módulo excluído'))) return
     onClose()
-    nav('/')
+    ir.modulos()
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[calc(100dvh-3rem)] overflow-y-auto p-6 sm:max-w-[720px]">
-        <DialogHeader>
-          <DialogTitle className="font-serif text-[1.4rem]">{modulo ? 'Editar módulo' : 'Novo módulo'}</DialogTitle>
-          <DialogDescription>Cada módulo agrupa as ocorrências de uma tela ou área do sistema.</DialogDescription>
-        </DialogHeader>
-
-        <div className="relative">
-          <ModuleCover nome={nm} emoji={emoji} cor={cor} className="h-[130px] rounded-xl" />
-          <span className="absolute bottom-2.5 left-3.5 font-semibold text-white [text-shadow:0_2px_10px_rgba(0,0,0,.5)]">
-            {nm}
-          </span>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="mod-nome">Nome</Label>
-          <Input
-            id="mod-nome"
-            value={nome}
-            onChange={(e) => setNome(e.target.value)}
-            placeholder="Ex.: Telas de Login"
-            className="bg-background"
-            autoFocus
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label>Ícone</Label>
-          <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Ícone">
-            {EMOJIS.map((e) => (
-              <button
-                key={e || 'none'}
-                role="radio"
-                aria-checked={emoji === e}
-                onClick={() => setEmoji(e)}
-                className={cn(
-                  'grid size-[38px] place-items-center rounded-[10px] border bg-background text-[1.15rem] text-muted-foreground',
-                  emoji === e && 'border-primary ring-3 ring-accent',
-                )}
-              >
-                {e || <span className="font-serif text-sm">Aa</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label>Capa</Label>
-          <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Capa">
-            {PALS.map((p, i) => (
-              <button
-                key={i}
-                role="radio"
-                aria-checked={i === corAtual}
-                aria-label={`Cor ${i + 1}`}
-                onClick={() => setCor(i)}
-                className={cn(
-                  'h-[30px] w-[42px] rounded-lg border-2 border-transparent',
-                  i === corAtual && 'border-primary ring-3 ring-accent',
-                )}
-                style={{ background: swatchBg(p) }}
-              />
-            ))}
-          </div>
-        </div>
-
-        <DialogFooter className="flex-row flex-wrap items-center gap-2 sm:justify-end">
-          <span className="mr-auto text-[.86rem] text-destructive">{status}</span>
-          {modulo && (
-            <Button variant="danger" onClick={excluir}>
+    <Modal
+      onClose={onClose}
+      titulo={orig ? 'Editar módulo' : 'Novo módulo'}
+      descricao="Cada módulo agrupa as ocorrências de uma tela ou área do sistema."
+      rodape={
+        <>
+          <StatusModal erro>{status}</StatusModal>
+          {orig && (
+            <Button variant="perigo" size="modal" className="font-medium" onClick={() => void excluir()}>
               Excluir módulo
             </Button>
           )}
-          <Button variant="subtle" onClick={onClose}>
+          <Button variant="linha" size="modal" className="font-medium" onClick={onClose}>
             Cancelar
           </Button>
-          <Button variant="gradient" onClick={salvar} disabled={salvando}>
+          <Button variant="primario" size="modal" disabled={salvando} onClick={() => void salvar()}>
             Salvar
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      }
+    >
+      <div className="group relative mb-4">
+        <ModuleCover nome={nm} emoji={emoji} cor={cor} grande className="h-[130px] rounded-xl" />
+        <span className="absolute bottom-2.5 left-3.5 text-base font-semibold text-white [text-shadow:0_2px_10px_rgba(0,0,0,.5)]">{nm}</span>
+      </div>
+      <Campo label="Nome">
+        <input
+          value={nome}
+          onChange={(e) => {
+            setNome(e.target.value)
+            setStatus('')
+          }}
+          placeholder="Ex.: Telas de Login"
+          className={inputCls}
+          autoFocus
+        />
+      </Campo>
+      <Campo label="Ícone" className="gap-1.5">
+        <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Ícone">
+          {EMOJIS.map((e) => (
+            <button
+              key={e || 'nenhum'}
+              type="button"
+              role="radio"
+              aria-checked={emoji === e}
+              onClick={() => setEmoji(e)}
+              className={cn(
+                'grid size-[38px] place-items-center rounded-[10px] border bg-q-bg font-serif text-[1.15rem] text-q-muted',
+                emoji === e ? 'border-q-accent ring-3 ring-q-soft' : 'border-q-line',
+              )}
+            >
+              {e || 'Aa'}
+            </button>
+          ))}
+        </div>
+      </Campo>
+      <Campo label="Capa" className="gap-1.5">
+        <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Capa">
+          {PALS.map((p, i) => (
+            <button
+              key={i}
+              type="button"
+              role="radio"
+              aria-checked={i === ci}
+              aria-label={'Cor ' + (i + 1)}
+              onClick={() => setCor(i)}
+              className={cn('h-[30px] w-[42px] rounded-lg border-2', i === ci ? 'border-q-accent ring-3 ring-q-soft' : 'border-transparent')}
+              style={{ background: swatchBg(p) }}
+            />
+          ))}
+        </div>
+      </Campo>
+    </Modal>
   )
 }

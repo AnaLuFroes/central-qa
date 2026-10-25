@@ -1,22 +1,27 @@
-import { collection, doc, serverTimestamp, updateDoc } from 'firebase/firestore'
+import { doc, runTransaction, serverTimestamp, setDoc, type DocumentSnapshot } from 'firebase/firestore'
 import { db } from '@/firebase'
-import type { Role, Usuario } from '@/types'
-import { ms, type Snap } from './conv'
+import { str } from './conv'
 
-export const usuariosCol = collection(db, 'users')
-
-export const fromUsuario = (s: Snap): Usuario => {
-  const d = s.data()
-  return {
-    uid: s.id,
-    email: d.email ?? '',
-    nome: d.nome ?? '',
-    foto: d.foto ?? '',
-    role: d.role ?? 'pendente',
-    criadoEm: ms(d.criadoEm),
-  }
+/** users/{uid}: dados da conta. A empresa e o perfil vêm de orgs/{orgId}/membros/{email}. */
+export interface Usuario {
+  orgId: string | null
+  superAdmin: boolean
 }
 
-/** Só o admin consegue (regras do Firestore). Também dá para mudar o campo `role` direto no console. */
-export const definirNivel = (uid: string, role: Role, adminUid: string) =>
-  updateDoc(doc(usuariosCol, uid), { role, roleAlteradoPor: adminUid, roleAlteradoEm: serverTimestamp() })
+export const userRef = (uid: string) => doc(db, 'users', uid)
+
+export const fromUsuario = (s: DocumentSnapshot): Usuario => ({
+  orgId: str(s.get('orgId')) || null,
+  superAdmin: s.get('superAdmin') === true,
+})
+
+/** Cria o perfil no primeiro acesso, sem sobrescrever um orgId gravado ao mesmo tempo pelo cadastro da empresa. */
+export const criarUsuario = (uid: string, email: string, nome: string, foto: string) =>
+  runTransaction(db, async (tx) => {
+    const ref = userRef(uid)
+    if ((await tx.get(ref)).exists()) return
+    tx.set(ref, { email, nome, foto, orgId: null, criadoEm: serverTimestamp() })
+  })
+
+/** Liga a conta à empresa da qual a pessoa é dona. */
+export const ligarEmpresa = (uid: string, orgId: string) => setDoc(userRef(uid), { orgId }, { merge: true })

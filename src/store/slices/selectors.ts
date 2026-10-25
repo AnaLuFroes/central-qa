@@ -1,68 +1,57 @@
 import { createSelector } from '@reduxjs/toolkit'
 import type { RootState } from '@/store'
-import type { Lote, Modulo, Ocorrencia } from '@/types'
+import { modOf } from '@/lib/format'
+import { comStatus } from '@/lib/painel'
+import { loteStats, type LoteStats } from '@/lib/status'
+import type { Modulo } from '@/types'
 
-export const selModulos = (s: RootState) => s.data.modulos
-export const selOcorrencias = (s: RootState) => s.data.ocorrencias
-export const selLotes = (s: RootState) => s.data.lotes
-export const selProgresso = (s: RootState) => s.data.progresso
+export const selSisId = (s: RootState) => s.ui.sis
+export const selSistemas = (s: RootState) => s.data.sistemas
+export const selRespostas = (s: RootState) => s.data.respostas
+const selModulosAll = (s: RootState) => s.data.modulos
+const selOcorrenciasAll = (s: RootState) => s.data.ocorrencias
+const selLotesAll = (s: RootState) => s.data.lotes
+const selFeaturesAll = (s: RootState) => s.data.features
+const selRodadasAll = (s: RootState) => s.data.rodadas
 
-export interface StatsModulo {
-  total: number
-  erros: number
-  melh: number
-  pend: number
-}
+export const selSistemasOrdenados = createSelector([selSistemas], (xs) =>
+  [...xs].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+)
+export const selSistema = createSelector([selSistemas, selSisId], (xs, id) => xs.find((x) => x.id === id) ?? null)
 
-const stats = (fs: Ocorrencia[]): StatsModulo => ({
-  total: fs.length,
-  erros: fs.filter((f) => f.tipo === 'erro').length,
-  melh: fs.filter((f) => f.tipo !== 'erro').length,
-  pend: fs.filter((f) => !f.loteId).length,
-})
+const doSis = <T extends { sis: string }>(xs: T[], sis: string | null) => (sis ? xs.filter((x) => x.sis === sis) : [])
 
-export const selModulosOrdenados = createSelector([selModulos], (ms) =>
-  [...ms].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+export const selOcorrencias = createSelector([selOcorrenciasAll, selSisId], doSis)
+export const selLotes = createSelector([selLotesAll, selSisId], (xs, sis) =>
+  doSis(xs, sis).sort((a, b) => b.criadoEm - a.criadoEm),
+)
+export const selFeatures = createSelector([selFeaturesAll, selSisId], doSis)
+export const selRodadas = createSelector([selRodadasAll, selSisId], (xs, sis) =>
+  doSis(xs, sis).sort((a, b) => b.criadoEm - a.criadoEm),
 )
 
-export const selOcorrenciasPorModulo = createSelector([selOcorrencias], (os) => {
-  const m = new Map<string, Ocorrencia[]>()
-  for (const o of os) {
-    if (!m.has(o.moduloId)) m.set(o.moduloId, [])
-    m.get(o.moduloId)!.push(o)
+/** Módulos cadastrados mais os nomes usados por ocorrências sem módulo cadastrado, em ordem alfabética. */
+export const selModulos = createSelector([selModulosAll, selOcorrencias, selSisId], (ms, fs, sis): Modulo[] => {
+  const map = new Map<string, Modulo>()
+  for (const m of doSis(ms, sis)) map.set(m.nome, m)
+  for (const f of fs) {
+    const n = modOf(f)
+    if (!map.has(n)) map.set(n, { id: '', sis: sis ?? '', nome: n, emoji: '', cor: null, criadoEm: 0 })
   }
-  return m
+  return [...map.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
 })
 
-export const selStatsGerais = createSelector([selOcorrencias], stats)
+/** Ocorrências do sistema com o status visível. */
+export const selComStatus = createSelector([selOcorrencias, selLotesAll, selRespostas], comStatus)
 
-export const selStatsPorModulo = createSelector([selModulos, selOcorrenciasPorModulo], (ms, por) => {
-  const r: Record<string, StatsModulo> = {}
-  for (const m of ms) r[m.id] = stats(por.get(m.id) ?? [])
-  return r
+export const selLoteStats = createSelector([selLotesAll, selRespostas], (ls, r) => {
+  const out: Record<string, LoteStats> = {}
+  for (const l of ls) out[l.id] = loteStats(l, r)
+  return out
 })
 
-export interface LoteStats {
-  total: number
-  feitos: number
-  pct: number
-}
-
-export const loteStats = (l: Lote, feitos: Record<string, boolean> | undefined): LoteStats => {
-  const keys = l.secoes.flatMap((s) => s.itens.map((i) => i.key))
-  const dn = keys.filter((k) => feitos?.[k]).length
-  return { total: keys.length, feitos: dn, pct: keys.length ? Math.round((dn / keys.length) * 100) : 0 }
-}
-
-export const selLoteStats = createSelector([selLotes, selProgresso], (ls, p) => {
-  const r: Record<string, LoteStats> = {}
-  for (const l of ls) r[l.id] = loteStats(l, p[l.id])
-  return r
-})
-
-export const selSelecionadas = createSelector(
-  [selOcorrencias, (s: RootState) => s.ui.selecao],
-  (os, sel) => os.filter((o) => sel[o.id]),
+export const selSelecionadas = createSelector([selOcorrencias, (s: RootState) => s.ui.selecao], (os, sel) =>
+  os.filter((o) => sel[o.id]),
 )
 
 export const moduloPorNome = (ms: Modulo[], nome: string) =>

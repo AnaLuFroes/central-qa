@@ -15,9 +15,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
       }}
       style={
         {
-          "--normal-bg": "var(--navy)",
+          "--normal-bg": "var(--cqa-chip)",
           "--normal-text": "#fff",
-          "--normal-border": "var(--navy)",
+          "--normal-border": "var(--cqa-chip)",
           "--border-radius": "10px",
         } as React.CSSProperties
       }
