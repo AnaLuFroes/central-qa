@@ -7,8 +7,8 @@ Implementação em React + Firebase do protótipo **“Central de QA v2”** do 
 
 ## O que tem
 
-- **Várias empresas.** Cada empresa se cadastra, aguarda aprovação da equipe da Central de QA e, depois, o administrador
-  dela cadastra os sistemas e a equipe.
+- **Várias empresas.** Cada empresa se cadastra e já entra: quem cria a conta é o administrador dela e cadastra os
+  sistemas e a equipe. A equipe da Central de QA só intervém para suspender uma empresa, se precisar.
 - **Sistemas.** Cada sistema tem os próprios módulos, ocorrências, lotes, casos de teste e rodadas. A sigla do sistema é
   o prefixo do código fixo das ocorrências (`SO5-001`).
 - **Visão geral.** Fluxo das ocorrências, fila “Agora é com você”, módulos com pendências, última rodada e últimos lotes.
@@ -42,7 +42,7 @@ Implementação em React + Firebase do protótipo **“Central de QA v2”** do 
 
 | Quem | Onde fica | Pode |
 |---|---|---|
-| **Administrador da plataforma** | `users/{uid}.superAdmin = true` (marcado à mão no console) | Tela `/plataforma/empresas`: aprova, suspende e reativa empresas. Não vê os dados internos delas |
+| **Administrador da plataforma** | `users/{uid}.superAdmin = true` (marcado à mão no console) | Tela `/plataforma/empresas`: lista as empresas e suspende ou reativa. Não vê os dados internos delas |
 | **Administrador da empresa** | `orgs/{orgId}/membros/{email}.perfil = 'Admin'` | Tudo do QA, mais sistemas da empresa, equipe e perfis, configuração de IA e restaurar backup |
 | **QA** | `perfil = 'QA'` | Ocorrências, módulos, lotes, critérios, casos de teste, rodadas, busca e baixar backup |
 | **Dev** | `perfil = 'Dev'` | Só os sistemas com lotes para ele; responde item a item. Não vê ocorrências, módulos nem casos |
@@ -50,15 +50,15 @@ Implementação em React + Firebase do protótipo **“Central de QA v2”** do 
 Fluxos de acesso:
 
 1. **Cadastro da empresa** (`/cadastro`).
-   - Quem cria vira o administrador e cadastra os sistemas.
-   - A empresa nasce `pendente`; os dados só ficam acessíveis depois que um administrador da plataforma aprova.
+   - Quem cria vira o administrador e cadastra os sistemas. A empresa já nasce ativa, sem aprovação.
    - Contas criadas com e-mail e senha precisam confirmar o e-mail.
-2. **Equipe.**
+   - Quem entrou antes por Google ou "Primeiro acesso" e não tem empresa vê a opção "Criar conta da empresa".
+2. **Equipe.** Ninguém entra numa empresa sem o administrador dela.
    - O administrador da empresa adiciona a pessoa (nome, e-mail, perfil) em *Minha conta › Equipe e perfis*.
    - A pessoa entra com Google ou em *Primeiro acesso* com o mesmo e-mail.
    - No primeiro login o app encontra o convite e liga a conta à empresa.
-3. **Regras no servidor.** As regras do Firestore (`firestore.rules`) exigem e-mail verificado, empresa ativa e o perfil
-   certo para cada coleção.
+3. **Regras no servidor.** As regras do Firestore (`firestore.rules`) exigem e-mail verificado, empresa não suspensa e o
+   perfil certo para cada coleção.
 
 ## Configuração de IA
 
@@ -80,7 +80,7 @@ protótipo.
 
 ```
 users/{uid}                     email, nome, foto, orgId, superAdmin?
-orgs/{orgId}                    nome, status (pendente|ativa|suspensa), donoUid, donoEmail
+orgs/{orgId}                    nome, status (ativa|suspensa), donoUid, donoEmail
   membros/{email}               nome, perfil (Admin|QA|Dev), foto, uid (null até o primeiro acesso)
   sistemas/{id}                 nome, ini (sigla), cor, capa, seq (contador dos códigos)
   modulos/{id}                  sis, nome, emoji, cor
@@ -112,8 +112,12 @@ só `prints: [{ id, nome }]`.
 3. Publique as regras e os índices com `npx firebase deploy --only firestore:rules,firestore:indexes`. O índice de
    `membros.email` em collection group é necessário para achar os convites.
 4. `npm install` e `npm run dev`.
-5. Marque o seu usuário como administrador da plataforma: em `users/{seu uid}`, adicione `superAdmin: true` (booleano).
-   Depois aprove as empresas em `/plataforma/empresas`.
+5. Crie a conta da sua empresa em `/cadastro`.
+6. Opcional: para ver todas as empresas e poder suspender uma, marque o seu usuário como administrador da plataforma.
+   - Em Authentication › Users, copie o User UID.
+   - Em Firestore › `users` › documento com esse UID, adicione o campo `superAdmin`, tipo **boolean**, valor `true`.
+   - O campo `role` da versão 1 não é mais usado.
+   - Saia e entre de novo; a tela fica em `/plataforma/empresas`.
 
 Na Vercel, configure as mesmas variáveis `VITE_*` em Settings › Environment Variables e adicione o domínio da Vercel
 em Authentication › Settings › Domínios autorizados.

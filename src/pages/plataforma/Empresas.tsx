@@ -4,7 +4,7 @@ import { onSnapshot, orderBy, query } from 'firebase/firestore'
 import { Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/auth/AuthProvider'
-import { botaoBrandCls, botaoVidroCls, CabecalhoEntrada, CantoConta, TelaCentro } from '@/components/Entrada'
+import { botaoVidroCls, CabecalhoEntrada, CantoConta, TelaCentro } from '@/components/Entrada'
 import { definirStatusOrg, fromOrg, orgsCol } from '@/data/orgs'
 import { useArmar } from '@/hooks/useArmar'
 import { fmtData, nq, plural } from '@/lib/format'
@@ -15,26 +15,24 @@ import type { Org, StatusOrg } from '@/types'
 type Filtro = StatusOrg | 'todas'
 
 const FILTROS: [Filtro, string][] = [
-  ['pendente', 'Pendentes'],
   ['ativa', 'Ativas'],
   ['suspensa', 'Suspensas'],
   ['todas', 'Todas'],
 ]
 
 const ST: Record<StatusOrg, [string, string, string]> = {
-  pendente: ['Pendente', '#FFC879', 'rgba(255,200,121,.14)'],
   ativa: ['Ativa', '#7BE0B8', 'rgba(123,224,184,.14)'],
   suspensa: ['Suspensa', '#FF9EC7', 'rgba(255,158,199,.14)'],
 }
 
-/** Administração da plataforma: aprovar, suspender e reativar empresas. */
+/** Administração da plataforma: ver as empresas e suspender ou reativar o acesso. */
 export default function Empresas() {
   const { user, situacao } = useAuth()
   const sair = useSair()
   const nav = useNavigate()
   const [orgs, setOrgs] = useState<Org[] | null>(null)
   const [erro, setErro] = useState('')
-  const [filtro, setFiltro] = useState<Filtro>('pendente')
+  const [filtro, setFiltro] = useState<Filtro>('todas')
   const [q, setQ] = useState('')
 
   useEffect(
@@ -192,15 +190,6 @@ function LinhaEmpresa({ o, uid }: { o: Org; uid: string }) {
         {st[0]}
       </span>
       <span className="flex flex-wrap gap-2">
-        {o.status === 'pendente' && (
-          <button
-            disabled={ocupado}
-            onClick={() => mudar('ativa', `${o.nome} aprovada`)}
-            className={cn(botaoBrandCls, 'px-3.5 py-1.5 text-[.88rem]')}
-          >
-            Aprovar
-          </button>
-        )}
         {o.status === 'ativa' && (
           <button
             disabled={ocupado}

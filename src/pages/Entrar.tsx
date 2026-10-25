@@ -91,7 +91,7 @@ export default function Entrar() {
         titulo="Central de QA"
         sub={
           primeiro
-            ? 'Foi convidado pela sua empresa? Crie a sua senha com o mesmo e-mail do convite.'
+            ? 'Para quem foi adicionado à equipe por uma empresa: crie a sua senha com o mesmo e-mail. É o responsável pela empresa? Use “Criar conta da empresa”, abaixo.'
             : 'Entre com a sua conta. O QA vê o processo completo; o dev vê os lotes enviados para ele.'
         }
       />

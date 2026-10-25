@@ -1,4 +1,4 @@
-import { doc, serverTimestamp, setDoc, type DocumentSnapshot } from 'firebase/firestore'
+import { doc, runTransaction, serverTimestamp, setDoc, type DocumentSnapshot } from 'firebase/firestore'
 import { db } from '@/firebase'
 import { str } from './conv'
 
@@ -15,5 +15,13 @@ export const fromUsuario = (s: DocumentSnapshot): Usuario => ({
   superAdmin: s.get('superAdmin') === true,
 })
 
+/** Cria o perfil no primeiro acesso, sem sobrescrever um orgId gravado ao mesmo tempo pelo cadastro da empresa. */
 export const criarUsuario = (uid: string, email: string, nome: string, foto: string) =>
-  setDoc(userRef(uid), { email, nome, foto, orgId: null, criadoEm: serverTimestamp() })
+  runTransaction(db, async (tx) => {
+    const ref = userRef(uid)
+    if ((await tx.get(ref)).exists()) return
+    tx.set(ref, { email, nome, foto, orgId: null, criadoEm: serverTimestamp() })
+  })
+
+/** Liga a conta à empresa da qual a pessoa é dona. */
+export const ligarEmpresa = (uid: string, orgId: string) => setDoc(userRef(uid), { orgId }, { merge: true })

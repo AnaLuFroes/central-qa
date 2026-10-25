@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "demo-central-qa"
+    "default": "central-qa-6b532",
+    "demo": "demo-central-qa"
   }
 }

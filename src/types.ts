@@ -1,5 +1,5 @@
 export type Perfil = 'Admin' | 'QA' | 'Dev'
-export type StatusOrg = 'pendente' | 'ativa' | 'suspensa'
+export type StatusOrg = 'ativa' | 'suspensa'
 export type Tipo = 'erro' | 'melhoria'
 export type Prioridade = 'normal' | 'alta' | 'baixa'
 export type Repro = 'sempre' | 'asvezes' | 'umavez'

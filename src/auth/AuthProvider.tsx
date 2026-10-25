@@ -16,18 +16,18 @@ import { doc, onSnapshot } from 'firebase/firestore'
 import { auth } from '@/firebase'
 import { orgDoc } from '@/data/conv'
 import { aceitarConvite, convitesDoEmail, fromMembro } from '@/data/membros'
-import { fromOrg, orgsCol } from '@/data/orgs'
-import { criarUsuario, fromUsuario, userRef, type Usuario } from '@/data/usuarios'
+import { fromOrg, minhaEmpresa, orgsCol } from '@/data/orgs'
+import { criarUsuario, fromUsuario, ligarEmpresa, userRef, type Usuario } from '@/data/usuarios'
 import type { Membro, Org } from '@/types'
 
 /**
  * Situação da conta depois do login:
  * - verificar: e-mail/senha ainda não verificado (as regras exigem e-mail verificado);
  * - sem-empresa: nenhum convite para este e-mail;
- * - pendente / suspensa: a empresa ainda não foi aprovada pela Central de QA, ou foi suspensa;
+ * - suspensa: a empresa foi suspensa pela equipe da Central de QA;
  * - ok: membro de empresa ativa.
  */
-export type Situacao = 'verificar' | 'sem-empresa' | 'pendente' | 'suspensa' | 'ok'
+export type Situacao = 'verificar' | 'sem-empresa' | 'suspensa' | 'ok'
 
 interface AuthState {
   user: User | null
@@ -93,37 +93,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     )
   }, [user])
 
-  // Sem empresa: procura um convite para o e-mail (só com e-mail verificado).
+  // Sem empresa: religa a empresa da qual a pessoa é dona; senão, procura um convite para o e-mail
+  // (convites só com e-mail verificado).
   useEffect(() => {
-    if (!user?.email || !verificado || !usuario || usuario.orgId) {
-      if (usuario && !usuario.orgId) setOrgPronta(true)
-      return
-    }
+    if (!user?.email || !usuario || usuario.orgId) return
     let vivo = true
     setOrgPronta(false)
-    convitesDoEmail(user.email)
-      .then(async (cs) => {
-        if (!vivo) return
-        if (!cs.length) return setOrgPronta(true)
-        await aceitarConvite(cs[0].orgId, user.email!, user.uid, cs[0].membro.nome ? '' : user.displayName || '', user.photoURL ?? '')
-      })
-      .catch((e) => {
-        console.warn('[auth] não foi possível procurar convites', e)
-        if (vivo) setOrgPronta(true)
-      })
+    ;(async () => {
+      const dona = await minhaEmpresa(user.uid).catch(() => null)
+      if (!vivo) return
+      if (dona) return ligarEmpresa(user.uid, dona)
+      if (!verificado) return setOrgPronta(true)
+      const cs = await convitesDoEmail(user.email!)
+      if (!vivo) return
+      if (!cs.length) return setOrgPronta(true)
+      await aceitarConvite(cs[0].orgId, user.email!, user.uid, cs[0].membro.nome ? '' : user.displayName || '', user.photoURL ?? '')
+    })().catch((e) => {
+      console.warn('[auth] não foi possível procurar a empresa', e)
+      if (vivo) setOrgPronta(true)
+    })
     return () => {
       vivo = false
     }
   }, [user, verificado, usuario])
 
-  // Empresa e perfil na empresa.
+  // Empresa e perfil na empresa. Logo depois do cadastro, o listener pode começar antes de a gravação
+  // chegar ao servidor: a leitura é negada e o Firestore encerra o listener. Nesse caso, tenta de novo.
   const orgId = usuario?.orgId ?? null
+  const [tentativa, setTentativa] = useState(0)
   useEffect(() => {
     if (!user?.email || !orgId) return
     let o = false
     let m = false
+    let refazer: ReturnType<typeof setTimeout> | undefined
     setOrgPronta(false)
     const pronto = () => o && m && setOrgPronta(true)
+    const falhou = (e: { code?: string }, fim: () => void) => {
+      if (e.code === 'permission-denied' && tentativa < 5) {
+        clearTimeout(refazer)
+        refazer = setTimeout(() => setTentativa((t) => t + 1), 800 * (tentativa + 1))
+        return
+      }
+      fim()
+    }
     const subs = [
       onSnapshot(
         orgDoc(orgId, 'membros', user.email.toLowerCase()),
@@ -132,11 +144,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           m = true
           pronto()
         },
-        () => {
-          setMembro(null)
-          m = true
-          pronto()
-        },
+        (e) =>
+          falhou(e, () => {
+            setMembro(null)
+            m = true
+            pronto()
+          }),
       ),
       onSnapshot(
         doc(orgsCol, orgId),
@@ -145,15 +158,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           o = true
           pronto()
         },
-        () => {
-          setOrg(null)
-          o = true
-          pronto()
-        },
+        (e) =>
+          falhou(e, () => {
+            setOrg(null)
+            o = true
+            pronto()
+          }),
       ),
     ]
-    return () => subs.forEach((u) => u())
-  }, [user, orgId])
+    return () => {
+      clearTimeout(refazer)
+      subs.forEach((u) => u())
+    }
+  }, [user, orgId, tentativa])
 
   const superAdmin = !!usuario?.superAdmin
   const situacao: Situacao | null = !user
@@ -164,11 +181,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ? null
         : !org || !membro
           ? 'sem-empresa'
-          : org.status === 'pendente'
-            ? 'pendente'
-            : org.status === 'suspensa'
-              ? 'suspensa'
-              : 'ok'
+          : org.status === 'suspensa'
+            ? 'suspensa'
+            : 'ok'
   const loading = !authPronto || (!!user && (!usuario || (verificado && !orgPronta)))
 
   const value = useMemo<AuthState>(

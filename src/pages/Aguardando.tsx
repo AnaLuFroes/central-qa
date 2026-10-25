@@ -1,14 +1,14 @@
 import { useState, type ReactNode } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
-import { Building2, Clock, MailCheck, PauseCircle } from 'lucide-react'
+import { Building2, MailCheck, PauseCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/auth/AuthProvider'
 import { CartaoEscuro, Erro } from '@/components/qa'
-import { botaoBrandCls, botaoVidroCls, CabecalhoEntrada, linkCianoCls, TelaCentro } from '@/components/Entrada'
+import { botaoBrandCls, botaoVidroCls, CabecalhoEntrada, TelaCentro } from '@/components/Entrada'
 import { erroAuth } from '@/lib/erroAuth'
 import { useSair } from '@/store/SessionStore'
 
-/** Explica por que a pessoa ainda não entrou: e-mail a verificar, sem empresa, empresa pendente ou suspensa. */
+/** Explica por que a pessoa ainda não entrou: e-mail a verificar, sem empresa ou empresa suspensa. */
 export default function Aguardando() {
   const { user, org, situacao, superAdmin, reenviarVerificacao, conferirVerificacao } = useAuth()
   const sair = useSair()
@@ -65,15 +65,6 @@ export default function Aguardando() {
         </button>
       </>
     )
-  } else if (situacao === 'pendente') {
-    icone = <Clock />
-    titulo = 'Empresa em análise'
-    texto = (
-      <>
-        A empresa <b className="text-white">{org?.nome}</b> foi cadastrada e está aguardando a aprovação da equipe da
-        Central de QA. Assim que for aprovada, você entra direto nos sistemas.
-      </>
-    )
   } else if (situacao === 'suspensa') {
     icone = <PauseCircle />
     titulo = 'Acesso suspenso'
@@ -85,12 +76,21 @@ export default function Aguardando() {
     )
   } else {
     icone = <Building2 />
-    titulo = 'Você ainda não faz parte de uma empresa'
+    titulo = 'Sua conta ainda não está ligada a uma empresa'
     texto = (
       <>
-        Peça ao administrador da sua empresa para adicionar <b className="text-white">{email}</b> em{' '}
-        <b className="text-white">Minha conta › Equipe</b>. Depois disso, é só entrar de novo.
+        <b className="text-white">É o responsável pela empresa?</b> Crie a conta da empresa: você entra como
+        administrador e cadastra os sistemas e a equipe.
+        <span className="mt-3 block">
+          <b className="text-white">Foi convidado?</b> Peça ao administrador da sua empresa para adicionar{' '}
+          <b className="text-white">{email}</b> em <b className="text-white">Minha conta › Equipe</b> e entre de novo.
+        </span>
       </>
+    )
+    acoes = (
+      <button onClick={() => nav('/cadastro')} className={botaoBrandCls}>
+        Criar conta da empresa
+      </button>
     )
   }
 
@@ -118,14 +118,6 @@ export default function Aguardando() {
           Sair
         </button>
       </div>
-      {situacao === 'sem-empresa' && (
-        <p className="m-0 mt-5 text-[.92rem] text-hero-text">
-          Sua empresa ainda não usa a Central de QA?{' '}
-          <button onClick={() => nav('/cadastro')} className={linkCianoCls}>
-            Criar conta da empresa
-          </button>
-        </p>
-      )}
     </TelaCentro>
   )
 }

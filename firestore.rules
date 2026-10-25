@@ -1,10 +1,11 @@
 rules_version = '2';
 
 // Central de QA: várias empresas, cada uma com os dados em orgs/{orgId}/...
+// - Quem cria a conta da empresa é o administrador dela, e a empresa já nasce ativa.
 // - Administradores da plataforma (users/{uid}.superAdmin == true, marcado à mão no console)
-//   aprovam, suspendem e reativam empresas. Não leem os dados internos delas.
+//   podem suspender e reativar empresas. Não leem os dados internos delas.
 // - O perfil da pessoa na empresa (Admin | QA | Dev) fica em orgs/{orgId}/membros/{email}.
-//   Só vale com o e-mail verificado e com a empresa ativa.
+//   Só vale com o e-mail verificado e com a empresa não suspensa.
 service cloud.firestore {
   match /databases/{database}/documents {
     function logado() { return request.auth != null; }
@@ -17,7 +18,8 @@ service cloud.firestore {
     function membroP(o) { return /databases/$(database)/documents/orgs/$(o)/membros/$(meuEmail()); }
     function souMembro(o) { return verificado() && exists(membroP(o)); }
     function perfil(o) { return souMembro(o) ? get(membroP(o)).data.perfil : ''; }
-    function ativa(o) { return get(orgP(o)).data.status == 'ativa'; }
+    // Empresas antigas ainda podem estar como 'pendente': só 'suspensa' bloqueia.
+    function ativa(o) { return get(orgP(o)).data.status != 'suspensa'; }
     function membroAtivo(o) { return souMembro(o) && ativa(o); }
     function qa(o) { return perfil(o) in ['QA', 'Admin'] && ativa(o); }
     function dev(o) { return perfil(o) == 'Dev' && ativa(o); }
@@ -61,12 +63,12 @@ service cloud.firestore {
       allow create: if logado()
         && novo().keys().hasOnly(['nome', 'status', 'donoUid', 'donoEmail', 'criadoEm'])
         && texto(novo().nome, 120)
-        && novo().status == 'pendente'
+        && novo().status == 'ativa'
         && novo().donoUid == request.auth.uid
         && novo().donoEmail == meuEmail();
       allow update: if superAdmin()
         && mudou().hasOnly(['status', 'aprovadoPor', 'aprovadoEm'])
-        && novo().status in ['pendente', 'ativa', 'suspensa'];
+        && novo().status in ['ativa', 'suspensa'];
       allow delete: if false;
 
       // Equipe: o Admin convida, muda perfis e remove. O dono da conta é sempre Admin.
