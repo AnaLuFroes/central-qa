@@ -300,7 +300,7 @@ function Formulario({ m, fix, onClose }: { m: M; fix: Ocorrencia | undefined; on
           </select>
         </Campo>
       </div>
-      <Campo label="Perfil e dados usados">
+      <Campo label="Título da Ocorrência">
         <input
           value={f.massa}
           onChange={(e) => set({ massa: e.target.value })}
